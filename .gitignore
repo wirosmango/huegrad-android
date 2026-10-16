@@ -1,0 +1,16 @@
+# Секреты и ключи подписи: не публиковать
+*.jks
+*.keystore
+keystore.properties
+local.properties
+app/google-services.json
+
+# Сборка и IDE
+*.iml
+.gradle/
+.idea/
+build/
+app/build/
+app/release/
+captures/
+.DS_Store
