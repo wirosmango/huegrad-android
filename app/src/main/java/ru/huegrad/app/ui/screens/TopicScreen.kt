@@ -3,6 +3,9 @@
 package ru.huegrad.app.ui.screens
 
 import android.widget.Toast
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.PickVisualMediaRequest
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.*
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.foundation.lazy.LazyColumn
@@ -10,6 +13,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
+import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.rounded.Menu
 import ru.huegrad.app.ui.AppSettings
 import androidx.compose.material.icons.automirrored.rounded.Send
@@ -21,6 +25,15 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.foundation.clickable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Shape
+import androidx.compose.ui.res.painterResource
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
+import ru.huegrad.app.R
+import androidx.compose.ui.layout.ContentScale
+import coil3.compose.AsyncImage
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.LinkAnnotation
 import androidx.compose.ui.text.SpanStyle
@@ -38,12 +51,14 @@ import kotlinx.coroutines.launch
 import androidx.compose.ui.text.TextRange
 import androidx.compose.ui.text.input.TextFieldValue
 import ru.huegrad.app.forum.AppNotification
+import ru.huegrad.app.forum.CloudinaryUploader
 import ru.huegrad.app.forum.ForumIdentity
 import ru.huegrad.app.forum.ForumSession
 import ru.huegrad.app.forum.MentionToken
 import ru.huegrad.app.forum.Post
 import ru.huegrad.app.forum.PostsState
 import ru.huegrad.app.forum.TopicViewModel
+import ru.huegrad.app.forum.UploadEvent
 import ru.huegrad.app.ui.ForumAvatar
 import ru.huegrad.app.ui.MarkdownText
 import ru.huegrad.app.ui.NoInsets
@@ -60,6 +75,7 @@ fun TopicScreen(
     val state by vm.state.collectAsStateWithLifecycle()
     val title by vm.title.collectAsStateWithLifecycle()
     val liked by vm.liked.collectAsStateWithLifecycle()
+    val uploading by vm.uploading.collectAsStateWithLifecycle()
     // Ник вошедшего закреплён за аккаунтом, гость вводит ник сам
     val myNick by ForumSession.nickname.collectAsStateWithLifecycle()
 
@@ -67,6 +83,8 @@ fun TopicScreen(
     var field by rememberSaveable(stateSaver = TextFieldValue.Saver) { mutableStateOf(TextFieldValue("")) }
     val text = field.text
     var sending by remember { mutableStateOf(false) }
+    // Загруженное фото ждёт отправки: превью над полем вместо ссылки в тексте
+    var attachedUrl by rememberSaveable { mutableStateOf<String?>(null) }
     var highlighted by remember { mutableStateOf<Int?>(null) }
     // Пост, к которому надо прокрутить (переход из уведомления)
     var pendingPostId by rememberSaveable { mutableStateOf(vm.initialPostId) }
@@ -75,6 +93,21 @@ fun TopicScreen(
     val listState = rememberLazyListState()
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
+
+    // Системный выбор фото (не требует разрешений)
+    val pickPhoto = rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) { uri ->
+        if (uri != null) vm.uploadImage(uri)
+    }
+
+    // Готовое фото показывается превью над полем и уходит вместе с сообщением
+    LaunchedEffect(Unit) {
+        vm.uploadEvents.collect { event ->
+            when (event) {
+                is UploadEvent.Failed -> Toast.makeText(context, event.message, Toast.LENGTH_LONG).show()
+                is UploadEvent.Done -> attachedUrl = event.url
+            }
+        }
+    }
 
     // Подсказки ников при вводе @ник
     LaunchedEffect(field.text, field.selection) {
@@ -138,49 +171,125 @@ fun TopicScreen(
         },
         bottomBar = {
             if (state is PostsState.Ready) {
-                Surface(tonalElevation = 3.dp) {
+                // "floating": кнопки и поле парят над содержимым по отдельности; "minimal": плоская панель без рамок
+                val floating = AppSettings.inputStyle == "floating"
+                Surface(
+                    color = if (floating) Color.Transparent else MaterialTheme.colorScheme.surface,
+                    tonalElevation = if (floating) 0.dp else 3.dp,
+                ) {
                     Column(
                         Modifier
                             .windowInsetsPadding(WindowInsets.ime.union(WindowInsets.navigationBars))
-                            .padding(12.dp),
+                            .padding(horizontal = 12.dp, vertical = if (floating) 8.dp else 6.dp),
                         verticalArrangement = Arrangement.spacedBy(8.dp),
                     ) {
                         if (suggestions.isNotEmpty()) {
                             MentionSuggestions(suggestions, onPick = ::pickMention)
                         }
                         if (myNick == null) {
-                            OutlinedTextField(
-                                value = nick,
-                                onValueChange = { nick = it.take(30) },
-                                label = { Text("Ваш ник") },
-                                singleLine = true,
-                                modifier = Modifier.fillMaxWidth(),
-                            )
+                            ComposerBox(floating, RoundedCornerShape(24.dp), Modifier.fillMaxWidth()) {
+                                TextField(
+                                    value = nick,
+                                    onValueChange = { nick = it.take(30) },
+                                    placeholder = { Text("Ваш ник") },
+                                    singleLine = true,
+                                    colors = composerFieldColors(),
+                                    modifier = Modifier.fillMaxWidth(),
+                                )
+                            }
                         }
-                        Row(verticalAlignment = Alignment.Bottom) {
-                            OutlinedTextField(
-                                value = field,
-                                onValueChange = {
-                                    val t = it.text.take(2000)
-                                    field = if (t.length == it.text.length) it else it.copy(text = t, selection = TextRange(t.length))
-                                },
-                                label = { Text(if (myNick != null) "Сообщение как $myNick" else "Сообщение") },
-                                modifier = Modifier.weight(1f),
-                                maxLines = 4,
-                            )
-                            FilledIconButton(
-                                onClick = {
-                                    sending = true
-                                    vm.send(myNick ?: nick, text) { error ->
-                                        sending = false
-                                        if (error == null) field = TextFieldValue("")
-                                        else Toast.makeText(context, error, Toast.LENGTH_LONG).show()
+                        attachedUrl?.let { url ->
+                            Box(Modifier.padding(top = 4.dp)) {
+                                AsyncImage(
+                                    model = url,
+                                    contentDescription = "Прикреплённое фото",
+                                    contentScale = ContentScale.Crop,
+                                    modifier = Modifier.size(96.dp).clip(MaterialTheme.shapes.medium),
+                                )
+                                FilledTonalIconButton(
+                                    onClick = { attachedUrl = null },
+                                    modifier = Modifier.align(Alignment.TopEnd).padding(4.dp).size(28.dp),
+                                ) { Icon(Icons.Rounded.Close, contentDescription = "Убрать фото", Modifier.size(16.dp)) }
+                            }
+                        }
+                        Row(
+                            verticalAlignment = if (floating) Alignment.Bottom else Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(if (floating) 8.dp else 4.dp),
+                        ) {
+                            ComposerBox(floating, CircleShape, Modifier.size(if (floating) 56.dp else 40.dp)) {
+                                Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                                    if (uploading) {
+                                        CircularProgressIndicator(Modifier.size(if (floating) 24.dp else 20.dp), strokeWidth = 2.5.dp)
+                                    } else {
+                                        IconButton(onClick = {
+                                            if (CloudinaryUploader.isConfigured) {
+                                                pickPhoto.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
+                                            } else {
+                                                Toast.makeText(
+                                                    context,
+                                                    "Cloudinary не настроен: добавьте cloudinary.cloudName и cloudinary.uploadPreset в local.properties",
+                                                    Toast.LENGTH_LONG,
+                                                ).show()
+                                            }
+                                        }) {
+                                            Icon(
+                                                painterResource(R.drawable.ic_attach_plus),
+                                                contentDescription = "Прикрепить фото",
+                                                modifier = Modifier.size(if (floating) 24.dp else 18.dp),
+                                                tint = if (floating) LocalContentColor.current else MaterialTheme.colorScheme.primary,
+                                            )
+                                        }
                                     }
-                                },
-                                enabled = (myNick != null || nick.isNotBlank()) && text.isNotBlank() && !sending,
-                                shape = MaterialShapes.Cookie12Sided.toShape(),
-                                modifier = Modifier.padding(start = 8.dp).size(56.dp),
-                            ) { Icon(Icons.AutoMirrored.Rounded.Send, contentDescription = "Отправить") }
+                                }
+                            }
+                            ComposerBox(floating, RoundedCornerShape(24.dp), Modifier.weight(1f)) {
+                                TextField(
+                                    value = field,
+                                    onValueChange = {
+                                        val t = it.text.take(2000)
+                                        field = if (t.length == it.text.length) it else it.copy(text = t, selection = TextRange(t.length))
+                                    },
+                                    placeholder = { Text(if (myNick != null) "Сообщение" else "Текст...") },
+                                    colors = composerFieldColors(),
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .offset(x = if (floating) 0.dp else (-12).dp),
+                                    maxLines = 4,
+                                )
+                            }
+                            val send: () -> Unit = {
+                                sending = true
+                                vm.send(myNick ?: nick, text, attachedUrl) { error ->
+                                    sending = false
+                                    if (error == null) {
+                                        field = TextFieldValue("")
+                                        attachedUrl = null
+                                    }
+                                    else Toast.makeText(context, error, Toast.LENGTH_LONG).show()
+                                }
+                            }
+                            val canSend = (myNick != null || nick.isNotBlank()) && (text.isNotBlank() || attachedUrl != null) && !sending && !uploading
+                            if (floating) {
+                                FilledIconButton(
+                                    onClick = send,
+                                    enabled = canSend,
+                                    shape = MaterialShapes.Cookie12Sided.toShape(),
+                                    modifier = Modifier.size(56.dp),
+                                ) { Icon(Icons.AutoMirrored.Rounded.Send, contentDescription = "Отправить") }
+                            } else {
+                                IconButton(
+                                    onClick = send,
+                                    enabled = canSend,
+                                    modifier = Modifier.size(40.dp),
+                                ) {
+                                    Icon(
+                                        Icons.AutoMirrored.Rounded.Send,
+                                        contentDescription = "Отправить",
+                                        tint = MaterialTheme.colorScheme.primary,
+                                        modifier = Modifier.size(18.dp),
+                                    )
+                                }
+                            }
                         }
                     }
                 }
@@ -228,6 +337,35 @@ fun TopicScreen(
         }
     }
 }
+
+/** Подложка элемента панели ввода: у "плавающей" панели белая плашка с тенью, у "минимализма" её нет. */
+@Composable
+private fun ComposerBox(floating: Boolean, shape: Shape, modifier: Modifier = Modifier, content: @Composable () -> Unit) {
+    if (floating) {
+        Surface(
+            shape = shape,
+            color = MaterialTheme.colorScheme.surfaceContainerHigh,
+            shadowElevation = 4.dp,
+            modifier = modifier,
+            content = content,
+        )
+    } else {
+        Box(modifier) { content() }
+    }
+}
+
+/** Поле ввода без рамки и подчёркивания: подложку рисует [ComposerBox]. */
+@Composable
+private fun composerFieldColors() = TextFieldDefaults.colors(
+    focusedContainerColor = Color.Transparent,
+    unfocusedContainerColor = Color.Transparent,
+    disabledContainerColor = Color.Transparent,
+    errorContainerColor = Color.Transparent,
+    focusedIndicatorColor = Color.Transparent,
+    unfocusedIndicatorColor = Color.Transparent,
+    disabledIndicatorColor = Color.Transparent,
+    errorIndicatorColor = Color.Transparent,
+)
 
 /** Подсказки ников над полем ввода: нажатие подставляет @ник в текст. */
 @Composable
@@ -291,7 +429,15 @@ private fun PostCard(
                     modifier = Modifier.clickable(onClick = onNumberClick),
                 )
             }
-            MarkdownText(post.message, onRefClick, myNick = myNick)
+            if (post.message.isNotBlank()) MarkdownText(post.message, onRefClick, myNick = myNick)
+            post.images.forEach { url ->
+                AsyncImage(
+                    model = url,
+                    contentDescription = null,
+                    contentScale = ContentScale.FillWidth,
+                    modifier = Modifier.fillMaxWidth().clip(MaterialTheme.shapes.medium),
+                )
+            }
             // Поставленный лайк заливается цветом акцента (и не выцветает, хотя кнопка уже неактивна)
             Button(
                 onClick = onLike,

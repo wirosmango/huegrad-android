@@ -17,7 +17,12 @@ object AppSettings {
         private set
     var navStyle by mutableStateOf("floating")
         private set
+    var navShape by mutableStateOf("rounded")
+        private set
     var navPanelBackground by mutableStateOf(true)
+        private set
+    /** Панель ввода сообщений на форуме: "floating" (плавающая) или "minimal" (минимализм). */
+    var inputStyle by mutableStateOf("floating")
         private set
 
     /** Set by the app shell so every page toolbar can open the drawer. */
@@ -30,7 +35,9 @@ object AppSettings {
         fontMode = p.getString("font_mode", "google_sans") ?: "google_sans"
         navLabels = p.getBoolean("nav_labels", false)
         navStyle = p.getString("nav_style", "floating") ?: "floating"
+        navShape = p.getString("nav_shape", "rounded") ?: "rounded"
         navPanelBackground = p.getBoolean("nav_panel_background", true)
+        inputStyle = p.getString("input_style", "floating") ?: "floating"
     }
 
     fun setThemeMode(context: Context, value: String) {
@@ -53,8 +60,16 @@ object AppSettings {
         navStyle = value
         context.getSharedPreferences("huegrad_settings", Context.MODE_PRIVATE).edit().putString("nav_style", value).apply()
     }
+    fun setNavShape(context: Context, value: String) {
+        navShape = value
+        context.getSharedPreferences("huegrad_settings", Context.MODE_PRIVATE).edit().putString("nav_shape", value).apply()
+    }
     fun setNavPanelBackground(context: Context, value: Boolean) {
         navPanelBackground = value
         context.getSharedPreferences("huegrad_settings", Context.MODE_PRIVATE).edit().putBoolean("nav_panel_background", value).apply()
+    }
+    fun setInputStyle(context: Context, value: String) {
+        inputStyle = value
+        context.getSharedPreferences("huegrad_settings", Context.MODE_PRIVATE).edit().putString("input_style", value).apply()
     }
 }

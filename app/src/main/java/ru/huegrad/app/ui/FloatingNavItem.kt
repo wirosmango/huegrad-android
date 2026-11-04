@@ -57,7 +57,10 @@ fun RowScope.FloatingNavItem(
             .weight(1f + 1.4f * p)
             .fillMaxHeight()
             .padding(5.dp)
-            .background(scheme.primary.copy(alpha = 0.22f * p), RoundedCornerShape(50))
+            .background(
+                scheme.primary.copy(alpha = 0.22f * p),
+                if (AppSettings.navShape == "rectangle") RoundedCornerShape(12.dp) else RoundedCornerShape(50),
+            )
             .clickable(onClick = onClick),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.Center,

@@ -36,6 +36,8 @@ import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import coil3.compose.AsyncImage
 import ru.huegrad.app.forum.ForumIdentity
+import ru.huegrad.app.forum.isImageUrl
+import ru.huegrad.app.forum.secureImageUrl
 
 /*
  * Лёгкий Markdown для сообщений форума. Набор как на сайте (marked + DOMPurify):
@@ -57,7 +59,32 @@ private val headingRe = Regex("^(#{1,3})\\s+(.+)$")
 private val quoteRe = Regex("^>\\s?(.*)$")
 private val bulletRe = Regex("^\\s*[-*+]\\s+(.+)$")
 private val orderedRe = Regex("^\\s*\\d+[.)]\\s+(.+)$")
-private val imageRe = Regex("^!\\[([^\\]]*)]\\((https?://[^)\\s]+)\\)$")
+private val imageRe = Regex("""^!\[([^\]]*)]\((https?://[^)\s]+)(?:\s+"[^"]*")?\)$""")
+
+/*
+ * Картинки внутри строки (старые посты с сайта): [![alt](img)](ссылка), ![alt](img), <img src="...">
+ * и просто ссылка на картинку (расширение файла или Cloudinary).
+ */
+private val inlineImageRe = Regex(
+    """\[!\[([^\]]*)]\((https?://[^)\s]+)\)]\(https?://[^)\s]+\)""" +
+        """|!\[([^\]]*)]\((https?://[^)\s]+)(?:\s+"[^"]*")?\)""" +
+        """|<img\s[^>]*?src=["'](https?://[^"']+)["'][^>]*>""" +
+        """|(?<![(\"'=\w`])(https?://[^\s<>"]+)"""
+)
+
+private fun imageOf(m: MatchResult): MdBlock.Image? {
+    val g = m.groupValues
+    return when {
+        g[2].isNotEmpty() -> MdBlock.Image(g[1], secureImageUrl(g[2]))
+        g[4].isNotEmpty() -> MdBlock.Image(g[3], secureImageUrl(g[4]))
+        g[5].isNotEmpty() -> MdBlock.Image("", secureImageUrl(g[5]))
+        g[6].isNotEmpty() -> {
+            val url = g[6].trimEnd('.', ',', ';', ':', '!', '?', ')')
+            if (isImageUrl(url)) MdBlock.Image("", secureImageUrl(url)) else null
+        }
+        else -> null
+    }
+}
 
 internal fun parseMarkdown(src: String): List<MdBlock> {
     val lines = src.replace("\r\n", "\n").replace('\r', '\n').split("\n")
@@ -121,7 +148,21 @@ internal fun parseMarkdown(src: String): List<MdBlock> {
                 }
                 out += MdBlock.Items(ordered, items)
             }
-            else -> { para += line; i++ }
+            else -> {
+                // Картинки в середине текста выносим отдельными блоками, текст до и после остаётся абзацами
+                var last = 0
+                for (m in inlineImageRe.findAll(line)) {
+                    val img = imageOf(m) ?: continue
+                    val before = line.substring(last, m.range.first)
+                    if (before.isNotBlank()) para += before.trimEnd()
+                    flush()
+                    out += img
+                    last = m.range.last + 1
+                }
+                val rest = line.substring(last)
+                if (last == 0 || rest.isNotBlank()) para += rest
+                i++
+            }
         }
     }
     flush()

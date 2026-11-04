@@ -189,7 +189,7 @@ fun HuegradApp() {
                     ) {
                         Surface(
                             modifier = Modifier.fillMaxWidth(),
-                            shape = CircleShape,
+                            shape = if (AppSettings.navShape == "rectangle") RoundedCornerShape(16.dp) else CircleShape,
                             color = panelColor,
                             tonalElevation = if (AppSettings.navPanelBackground) 3.dp else 0.dp,
                             shadowElevation = if (AppSettings.navPanelBackground) 8.dp else 0.dp,
@@ -217,7 +217,7 @@ fun HuegradApp() {
                                                 .padding(5.dp)
                                                 .background(
                                                     color = if (selected) MaterialTheme.colorScheme.primary.copy(alpha = 0.22f) else Color.Transparent,
-                                                    shape = RoundedCornerShape(50),
+                                                    shape = if (AppSettings.navShape == "rectangle") RoundedCornerShape(12.dp) else RoundedCornerShape(50),
                                                 )
                                                 .clickable { navigateTo(d.route) },
                                             contentAlignment = Alignment.Center,

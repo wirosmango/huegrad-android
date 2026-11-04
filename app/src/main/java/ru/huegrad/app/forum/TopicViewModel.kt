@@ -1,6 +1,7 @@
 package ru.huegrad.app.forum
 
 import android.app.Application
+import android.net.Uri
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.viewModelScope
@@ -10,9 +11,13 @@ import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.ListenerRegistration
 import com.google.firebase.firestore.Query
 import com.google.firebase.firestore.Transaction
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
@@ -25,7 +30,14 @@ data class Post(
     val timeMs: Long?,
     val likes: Long,
     val authorUid: String? = null, // только у вошедших, нужен для уведомлений об ответах
+    val images: List<String> = emptyList(), // картинки из полей документа, которых нет в тексте (старые посты)
 )
+
+/** Результат загрузки фото в Cloudinary. */
+sealed interface UploadEvent {
+    data class Done(val url: String) : UploadEvent
+    data class Failed(val message: String) : UploadEvent
+}
 
 sealed interface PostsState {
     data object NotConfigured : PostsState
@@ -53,6 +65,14 @@ class TopicViewModel(app: Application, handle: SavedStateHandle) : AndroidViewMo
 
     private val _liked = MutableStateFlow<Set<String>>(emptySet())
     val liked: StateFlow<Set<String>> = _liked.asStateFlow()
+
+    private val _uploading = MutableStateFlow(false)
+    val uploading: StateFlow<Boolean> = _uploading.asStateFlow()
+
+    private val uploadChannel = Channel<UploadEvent>(Channel.BUFFERED)
+
+    /** Каждое событие приходит один раз, даже если экран пересоздался во время загрузки. */
+    val uploadEvents: Flow<UploadEvent> = uploadChannel.receiveAsFlow()
 
     private var uid: String? = null
     private val likeChecked = mutableSetOf<String>()
@@ -91,6 +111,7 @@ class TopicViewModel(app: Application, handle: SavedStateHandle) : AndroidViewMo
                                 timeMs = d.getTimestamp("createdAt")?.toDate()?.time,
                                 likes = d.getLong("likes") ?: 0L,
                                 authorUid = d.getString("authorUid"),
+                                images = extractImages(d.data, d.getString("message") ?: ""),
                             )
                         }
                         lastPosts = posts
@@ -113,11 +134,18 @@ class TopicViewModel(app: Application, handle: SavedStateHandle) : AndroidViewMo
      * onDone получает null при успехе или текст ошибки.
      * Вошедший пользователь пишет под своим закреплённым ником, гость под введённым (если он не занят).
      */
-    fun send(nick: String, message: String, onDone: (String?) -> Unit) {
+    fun send(nick: String, message: String, imageUrl: String?, onDone: (String?) -> Unit) {
         viewModelScope.launch {
             val registered = ForumSession.nickname.value
             val nickname = (registered ?: nick.trim()).take(30)
-            val text = message.trim().take(2000)
+            // Прикреплённое фото уходит в конце сообщения строкой ![](url), как на сайте
+            val suffix = imageUrl?.let { "\n![]($it)" }.orEmpty()
+            val text = message.trim().take((2000 - suffix.length).coerceAtLeast(0)).trim()
+            val full = (text + suffix).trim()
+            if (full.isEmpty()) {
+                onDone("Пустое сообщение")
+                return@launch
+            }
             try {
                 // После выхода из аккаунта вход анонимный нужно восстановить, иначе правила запретят запись
                 val uid = ForumAuth.signIn()
@@ -135,7 +163,7 @@ class TopicViewModel(app: Application, handle: SavedStateHandle) : AndroidViewMo
                 val data = mutableMapOf<String, Any?>(
                     "topicId" to topicId,
                     "nickname" to nickname,
-                    "message" to text,
+                    "message" to full,
                     "createdAt" to FieldValue.serverTimestamp(),
                     "likes" to 0,
                 )
@@ -147,7 +175,7 @@ class TopicViewModel(app: Application, handle: SavedStateHandle) : AndroidViewMo
 
                 ForumSession.notifyRecipients(
                     postId = ref.id,
-                    message = text,
+                    message = text.ifBlank { "[фото]" },
                     authorNick = nickname,
                     fromUid = uid,
                     fromPhoto = photo?.takeIf { it.isNotBlank() },
@@ -157,6 +185,24 @@ class TopicViewModel(app: Application, handle: SavedStateHandle) : AndroidViewMo
                 )
             } catch (e: Exception) {
                 onDone(e.localizedMessage ?: "Не удалось отправить")
+            }
+        }
+    }
+
+    /** Загружает фото в Cloudinary; ссылка приходит в [uploadEvents] и показывается превью над полем, к сообщению добавляется при отправке. */
+    fun uploadImage(uri: Uri) {
+        if (_uploading.value) return
+        _uploading.value = true
+        viewModelScope.launch {
+            try {
+                val url = CloudinaryUploader.upload(getApplication<Application>(), uri)
+                uploadChannel.send(UploadEvent.Done(url))
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                uploadChannel.send(UploadEvent.Failed(e.localizedMessage ?: "Не удалось загрузить фото"))
+            } finally {
+                _uploading.value = false
             }
         }
     }
@@ -180,4 +226,27 @@ class TopicViewModel(app: Application, handle: SavedStateHandle) : AndroidViewMo
         registration?.remove()
         super.onCleared()
     }
+}
+
+private val notImageKeys = setOf("message", "nickname", "photoURL", "avatarUrl", "authorUid", "topicId")
+
+/**
+ * Старые посты могли хранить картинку отдельным полем (имя поля неизвестно), поэтому просматриваем
+ * все поля документа и берём ссылки на картинки, которых ещё нет в тексте сообщения.
+ */
+internal fun extractImages(data: Map<String, Any?>?, message: String): List<String> {
+    if (data == null) return emptyList()
+    val out = LinkedHashSet<String>()
+    fun add(v: Any?) {
+        when (v) {
+            is String -> {
+                val u = v.trim()
+                if (' ' !in u && isImageUrl(u) && u !in message) out += secureImageUrl(u)
+            }
+            is List<*> -> v.forEach { add(it) }
+            is Map<*, *> -> v.values.forEach { add(it) }
+        }
+    }
+    data.forEach { (key, value) -> if (key !in notImageKeys) add(value) }
+    return out.toList()
 }

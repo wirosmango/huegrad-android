@@ -73,6 +73,12 @@ fun SettingsScreen(onBack: () -> Unit) {
                 selected = AppSettings.navStyle,
                 onSelect = { AppSettings.setNavStyle(context, it) },
             )
+            Text("Форма плавающей панели", style = MaterialTheme.typography.titleSmall)
+            ChoiceCard(
+                choices = listOf(Choice("rounded", "Круглая"), Choice("rectangle", "Прямоугольная")),
+                selected = AppSettings.navShape,
+                onSelect = { AppSettings.setNavShape(context, it) },
+            )
             Card(Modifier.fillMaxWidth()) {
                 Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                     SettingSwitch("Подписи под иконками", "Показывать названия разделов", AppSettings.navLabels) { AppSettings.setNavLabels(context, it) }
@@ -80,6 +86,13 @@ fun SettingsScreen(onBack: () -> Unit) {
                     SettingSwitch("Фон панели", "Показывать подложку и тень панели", AppSettings.navPanelBackground) { AppSettings.setNavPanelBackground(context, it) }
                 }
             }
+
+            Text("Панель ввода на форуме", style = MaterialTheme.typography.titleMedium)
+            ChoiceCard(
+                choices = listOf(Choice("floating", "Плавающая"), Choice("minimal", "Минимализм")),
+                selected = AppSettings.inputStyle,
+                onSelect = { AppSettings.setInputStyle(context, it) },
+            )
 
             Text("Тема приложения", style = MaterialTheme.typography.titleMedium)
             ChoiceCard(

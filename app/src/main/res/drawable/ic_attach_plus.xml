@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Скрепка с плюсом для кнопки прикрепления фото -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="24"
+    android:viewportHeight="24">
+    <group android:translateX="1.2">
+        <!-- Внешняя дуга скрепки -->
+        <path
+            android:pathData="M11.45,15.4 V6.8 A3.9,3.9 0 0 0 3.65,6.8 V17.5 C3.65,20 5.5,21.8 8.2,21.8 C10,21.8 11.4,21.2 12.3,20.3"
+            android:strokeColor="#FFFFFFFF"
+            android:strokeWidth="1.6" />
+        <!-- Внутренняя линия -->
+        <path
+            android:pathData="M7.8,6.6 V17.7"
+            android:strokeColor="#FFFFFFFF"
+            android:strokeWidth="1.6" />
+        <!-- Чёрточка и плюс -->
+        <path
+            android:pathData="M15.1,6.5 V12.4 M15.1,14.4 V21.7 M11.5,17.9 H19"
+            android:strokeColor="#FFFFFFFF"
+            android:strokeWidth="1.6" />
+    </group>
+</vector>
