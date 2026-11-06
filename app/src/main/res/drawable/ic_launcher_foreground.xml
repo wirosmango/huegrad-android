@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Иконка location_city (Material Icons), увеличена в 3 раза и по центру безопасной зоны адаптивной иконки.
-     Этот же слой используется как monochrome для тематической иконки Android 13+ (важна только форма). -->
+<!-- Иконка holiday_village, увеличена в 3 раза и по центру безопасной зоны адаптивной иконки.
+     Этот же слой используется как monochrome для тематической иконки Pixel (Android 13+): важна только форма. -->
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
     android:width="108dp"
     android:height="108dp"
@@ -13,6 +13,6 @@
         android:translateY="18">
         <path
             android:fillColor="#FFFFFFFF"
-            android:pathData="M15,11V5l-3,-3 -3,3v2H3v14h18V11H15zM7,19H5v-2h2V19zM7,15H5v-2h2V15zM7,11H5V9h2V11zM13,19h-2v-2h2V19zM13,15h-2v-2h2V15zM13,11h-2V9h2V11zM13,7h-2V5h2V7zM19,19h-2v-2h2V19zM19,15h-2v-2h2V15z" />
+            android:pathData="M8,4 L14,10 V20 H2 V10 Z M8,6.83 L4,10.83 V18 H12 V10.83 Z M7,11 H9 V13 H7 Z M7,15 H9 V18.5 H7 Z M11,4 H14 L18,8 V20 H16 V9 Z M17,4 H20 L22,6 V20 H20 V7 Z" />
     </group>
 </vector>

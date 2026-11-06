@@ -34,7 +34,7 @@ private val moreItems = listOf(
     MoreItem("history", "История Хуеграда", "От «го в майн на телефонах» до виртуального государства", Icons.Rounded.History),
     MoreItem("education", "Образование", "ПТУ, ХТУ и школа", Icons.Rounded.School),
     MoreItem("pizdjuk", "Пиздюк", "Нико ваншоь пиздюк офишиал", Icons.Rounded.Image),
-    MoreItem("settings", "Настройки", "Панель навигации, тема и акцентный цвет", Icons.Rounded.Settings),
+    MoreItem("settings", "Настройки", "Навигация и оформление", Icons.Rounded.Settings),
 )
 
 @Composable

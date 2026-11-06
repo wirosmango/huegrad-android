@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Иконка holiday_village (Material Symbols), 24dp, одноцветная: цвет задаёт система или tint -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="24"
+    android:viewportHeight="24">
+    <path
+        android:fillColor="#FFFFFFFF"
+        android:pathData="M8,4 L14,10 V20 H2 V10 Z M8,6.83 L4,10.83 V18 H12 V10.83 Z M7,11 H9 V13 H7 Z M7,15 H9 V18.5 H7 Z M11,4 H14 L18,8 V20 H16 V9 Z M17,4 H20 L22,6 V20 H20 V7 Z" />
+</vector>

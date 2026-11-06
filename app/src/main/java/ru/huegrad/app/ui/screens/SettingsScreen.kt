@@ -1,134 +1,233 @@
 package ru.huegrad.app.ui.screens
 
+import androidx.activity.compose.BackHandler
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.slideOutHorizontally
+import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.Card
-import androidx.compose.material3.FilterChip
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.rounded.Menu
+import androidx.compose.material.icons.rounded.Navigation
+import androidx.compose.material.icons.rounded.Palette
 import androidx.compose.material3.Icon
-import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.rounded.Menu
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.animation.core.LinearEasing
-import androidx.compose.animation.core.RepeatMode
-import androidx.compose.animation.core.animateFloat
-import androidx.compose.animation.core.infiniteRepeatable
-import androidx.compose.animation.core.rememberInfiniteTransition
-import androidx.compose.animation.core.tween
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.drawscope.rotate
-import androidx.compose.ui.graphics.drawscope.Stroke
-import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import ru.huegrad.app.ui.AppSettings
 import ru.huegrad.app.ui.NoInsets
 
-private data class Choice(val value: String, val title: String)
+private const val PAGE_NAVIGATION = "navigation"
+private const val PAGE_APPEARANCE = "appearance"
 
+/**
+ * Настройки в духе приложения «Настройки» Android 16: на главной странице категории,
+ * внутри каждой категории пункты собраны в скруглённые группы.
+ */
 @Composable
 fun SettingsScreen(onBack: () -> Unit) {
-    val context = LocalContext.current
+    // null = главная страница настроек, иначе открыта подстраница
+    var page by rememberSaveable { mutableStateOf<String?>(null) }
+    BackHandler(enabled = page != null) { page = null }
+
     Scaffold(
         contentWindowInsets = NoInsets,
         topBar = {
             TopAppBar(
-                title = { Text("Настройки") },
+                title = {
+                    Text(
+                        when (page) {
+                            PAGE_NAVIGATION -> "Навигация"
+                            PAGE_APPEARANCE -> "Оформление"
+                            else -> "Настройки"
+                        },
+                    )
+                },
                 navigationIcon = {
-                    if (AppSettings.navStyle == "drawer") {
-                        androidx.compose.material3.IconButton(onClick = { AppSettings.openDrawer?.invoke() }) {
+                    when {
+                        page != null -> CookieBackButton(onClick = { page = null })
+                        AppSettings.navStyle == "drawer" -> IconButton(onClick = { AppSettings.openDrawer?.invoke() }) {
                             Icon(Icons.Rounded.Menu, contentDescription = "Открыть меню")
                         }
-                    } else CookieBackButton(onClick = onBack)
+                        else -> CookieBackButton(onClick = onBack)
+                    }
                 },
             )
         },
     ) { padding ->
-        Column(
-            Modifier.fillMaxSize().padding(padding).verticalScroll(rememberScrollState()).padding(horizontal = 16.dp, vertical = 8.dp),
-            verticalArrangement = Arrangement.spacedBy(16.dp),
-        ) {
-            Text("Нижняя панель навигации", style = MaterialTheme.typography.titleMedium)
-            ChoiceCard(
-                choices = listOf(Choice("floating", "Плавающая"), Choice("md3", "MD3"), Choice("drawer", "Боковое меню")),
-                selected = AppSettings.navStyle,
-                onSelect = { AppSettings.setNavStyle(context, it) },
-            )
-            Text("Форма плавающей панели", style = MaterialTheme.typography.titleSmall)
-            ChoiceCard(
-                choices = listOf(Choice("rounded", "Круглая"), Choice("rectangle", "Прямоугольная")),
-                selected = AppSettings.navShape,
-                onSelect = { AppSettings.setNavShape(context, it) },
-            )
-            Card(Modifier.fillMaxWidth()) {
-                Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                    SettingSwitch("Подписи под иконками", "Показывать названия разделов", AppSettings.navLabels) { AppSettings.setNavLabels(context, it) }
-                    HorizontalDivider()
-                    SettingSwitch("Фон панели", "Показывать подложку и тень панели", AppSettings.navPanelBackground) { AppSettings.setNavPanelBackground(context, it) }
+        AnimatedContent(
+            targetState = page,
+            modifier = Modifier.padding(padding).fillMaxSize(),
+            transitionSpec = {
+                if (targetState != null) {
+                    (slideInHorizontally { it / 4 } + fadeIn()) togetherWith (slideOutHorizontally { -it / 4 } + fadeOut())
+                } else {
+                    (slideInHorizontally { -it / 4 } + fadeIn()) togetherWith (slideOutHorizontally { it / 4 } + fadeOut())
                 }
+            },
+            label = "settingsPage",
+        ) { current ->
+            Column(
+                Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 16.dp, vertical = 8.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                when (current) {
+                    PAGE_NAVIGATION -> NavigationSettings()
+                    PAGE_APPEARANCE -> AppearanceSettings()
+                    else -> SettingsRoot(onOpen = { page = it })
+                }
+                Spacer(Modifier.height(12.dp))
             }
-
-            Text("Панель ввода на форуме", style = MaterialTheme.typography.titleMedium)
-            ChoiceCard(
-                choices = listOf(Choice("floating", "Плавающая"), Choice("minimal", "Минимализм")),
-                selected = AppSettings.inputStyle,
-                onSelect = { AppSettings.setInputStyle(context, it) },
-            )
-
-            Text("Тема приложения", style = MaterialTheme.typography.titleMedium)
-            ChoiceCard(
-                choices = listOf(
-                    Choice("system", "Системная"),
-                    Choice("light", "Светлая"),
-                    Choice("dark", "Тёмная"),
-                    Choice("amoled", "AMOLED"),
-                ),
-                selected = AppSettings.themeMode,
-                onSelect = { AppSettings.setThemeMode(context, it) },
-            )
-
-            Text("Шрифт", style = MaterialTheme.typography.titleMedium)
-            Text("Выберите шрифт интерфейса приложения.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-            ChoiceCard(
-                choices = listOf(Choice("system", "Системный"), Choice("google_sans", "Google Sans")),
-                selected = AppSettings.fontMode,
-                onSelect = { AppSettings.setFontMode(context, it) },
-            )
-
-            Text("Акцентный цвет", style = MaterialTheme.typography.titleMedium)
-            Text("Material You использует цвета обоев устройства (Android 12 и новее).", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-            ChoiceCard(
-                choices = listOf(
-                    Choice("material_you", "Material You"), Choice("violet", "Фиолетовый"), Choice("blue", "Синий"),
-                    Choice("green", "Зелёный"), Choice("orange", "Оранжевый"), Choice("pink", "Розовый"), Choice("red", "Красный"),
-                ),
-                selected = AppSettings.accent,
-                onSelect = { AppSettings.setAccent(context, it) },
-            )
-            Spacer(Modifier.height(12.dp))
         }
     }
 }
 
+@Composable
+private fun SettingsRoot(onOpen: (String) -> Unit) {
+    ExpressiveListGroup {
+        ExpressiveListItem(
+            title = "Навигация",
+            subtitle = "Нижняя панель, её форма и фон, панель ввода на форуме",
+            icon = Icons.Rounded.Navigation,
+            onClick = { onOpen(PAGE_NAVIGATION) },
+            showDivider = true,
+        )
+        ExpressiveListItem(
+            title = "Оформление",
+            subtitle = "Тема, шрифт и акцентный цвет",
+            icon = Icons.Rounded.Palette,
+            onClick = { onOpen(PAGE_APPEARANCE) },
+        )
+    }
+}
+
+@Composable
+private fun NavigationSettings() {
+    val context = LocalContext.current
+
+    SectionTitle("Нижняя панель навигации")
+    ExpressiveChoiceGroup(
+        choices = listOf("floating" to "Плавающая", "md3" to "MD3", "drawer" to "Боковое меню"),
+        selected = AppSettings.navStyle,
+        onSelect = { AppSettings.setNavStyle(context, it) },
+    )
+
+    SectionTitle("Форма плавающей панели")
+    ExpressiveChoiceGroup(
+        choices = listOf("rounded" to "Круглая", "rectangle" to "Прямоугольная"),
+        selected = AppSettings.navShape,
+        onSelect = { AppSettings.setNavShape(context, it) },
+    )
+
+    SectionTitle("Вид панели")
+    ExpressiveListGroup {
+        SwitchItem(
+            title = "Подписи под иконками",
+            subtitle = "Показывать названия разделов",
+            checked = AppSettings.navLabels,
+            onChange = { AppSettings.setNavLabels(context, it) },
+            showDivider = true,
+        )
+        SwitchItem(
+            title = "Фон панели",
+            subtitle = "Показывать подложку и тень панели",
+            checked = AppSettings.navPanelBackground,
+            onChange = { AppSettings.setNavPanelBackground(context, it) },
+        )
+    }
+
+    SectionTitle("Панель ввода на форуме")
+    ExpressiveChoiceGroup(
+        choices = listOf("floating" to "Плавающая", "minimal" to "Минимализм"),
+        selected = AppSettings.inputStyle,
+        onSelect = { AppSettings.setInputStyle(context, it) },
+    )
+}
+
+@Composable
+private fun AppearanceSettings() {
+    val context = LocalContext.current
+
+    SectionTitle("Тема приложения")
+    ExpressiveChoiceGroup(
+        choices = listOf("system" to "Системная", "light" to "Светлая", "dark" to "Тёмная", "amoled" to "AMOLED"),
+        selected = AppSettings.themeMode,
+        onSelect = { AppSettings.setThemeMode(context, it) },
+    )
+
+    SectionTitle("Шрифт", "Выберите шрифт интерфейса приложения.")
+    ExpressiveChoiceGroup(
+        choices = listOf("system" to "Системный", "google_sans" to "Google Sans"),
+        selected = AppSettings.fontMode,
+        onSelect = { AppSettings.setFontMode(context, it) },
+    )
+
+    SectionTitle("Акцентный цвет", "Material You использует цвета обоев устройства (Android 12 и новее).")
+    ExpressiveChoiceGroup(
+        choices = listOf(
+            "material_you" to "Material You", "violet" to "Фиолетовый", "blue" to "Синий",
+            "green" to "Зелёный", "orange" to "Оранжевый", "pink" to "Розовый", "red" to "Красный",
+        ),
+        selected = AppSettings.accent,
+        onSelect = { AppSettings.setAccent(context, it) },
+    )
+}
+
+/** Заголовок раздела, как в Настройках Android: небольшой текст акцентного цвета над группой. */
+@Composable
+private fun SectionTitle(title: String, description: String? = null) {
+    Column(Modifier.padding(start = 16.dp, end = 16.dp, top = 12.dp)) {
+        Text(title, style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.primary)
+        if (description != null) {
+            Text(description, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        }
+    }
+}
+
+@Composable
+private fun SwitchItem(title: String, subtitle: String, checked: Boolean, onChange: (Boolean) -> Unit, showDivider: Boolean = false) {
+    ExpressiveListItem(
+        title = title,
+        subtitle = subtitle,
+        onClick = { onChange(!checked) },
+        trailing = { Switch(checked = checked, onCheckedChange = null) },
+        showDivider = showDivider,
+    )
+}
 
 @Composable
 private fun CookieBackButton(onClick: () -> Unit) {
@@ -186,35 +285,5 @@ private fun CookieBackButton(onClick: () -> Unit) {
             tint = playColor,
             modifier = Modifier.size(22.dp),
         )
-    }
-}
-
-@Composable
-private fun SettingSwitch(title: String, subtitle: String, checked: Boolean, onChange: (Boolean) -> Unit) {
-    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-        Column(Modifier.weight(1f).padding(end = 12.dp)) {
-            Text(title, style = MaterialTheme.typography.bodyLarge)
-            Text(subtitle, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-        }
-        Switch(checked = checked, onCheckedChange = onChange)
-    }
-}
-
-@Composable
-private fun ChoiceCard(choices: List<Choice>, selected: String, onSelect: (String) -> Unit) {
-    Card(Modifier.fillMaxWidth()) {
-        Column(Modifier.fillMaxWidth().padding(12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-            choices.chunked(3).forEach { rowChoices ->
-                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    rowChoices.forEach { choice ->
-                        FilterChip(
-                            selected = selected == choice.value,
-                            onClick = { onSelect(choice.value) },
-                            label = { Text(choice.title) },
-                        )
-                    }
-                }
-            }
-        }
     }
 }

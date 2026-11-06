@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Картинки и треки ищутся по имени (getIdentifier), поэтому сжатие ресурсов не должно считать их неиспользуемыми -->
+<resources xmlns:tools="http://schemas.android.com/tools"
+    tools:keep="@drawable/m_*,@raw/*,@font/*"
+    tools:shrinkMode="strict" />
