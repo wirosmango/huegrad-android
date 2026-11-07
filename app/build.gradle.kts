@@ -26,7 +26,7 @@ android {
         minSdk = 26
         targetSdk = 36
         versionCode = 1
-        versionName = "2.6"
+        versionName = "2.7"
 
         buildConfigField("String", "CLOUDINARY_CLOUD_NAME", "\"${cloudinaryProp("cloudinary.cloudName", "CLOUDINARY_CLOUD_NAME")}\"")
         buildConfigField("String", "CLOUDINARY_UPLOAD_PRESET", "\"${cloudinaryProp("cloudinary.uploadPreset", "CLOUDINARY_UPLOAD_PRESET")}\"")

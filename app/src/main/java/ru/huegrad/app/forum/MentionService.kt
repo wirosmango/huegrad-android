@@ -20,7 +20,7 @@ import ru.huegrad.app.R
 /**
  * Фоновый сервис: пока он работает, процесс приложения не замораживается, и слушатель уведомлений
  * из ForumSession получает новые упоминания даже при свёрнутом приложении. Сам он ничего не слушает.
- * Работает только для вошедшего аккаунта и только если включён переключатель в аккаунте.
+ * Работает только для вошедшего аккаунта и только если включён переключатель в Настройках → Уведомления.
  */
 class MentionService : Service() {
 
@@ -42,7 +42,7 @@ class MentionService : Service() {
         val notification = NotificationCompat.Builder(this, CHANNEL_ID)
             .setSmallIcon(R.drawable.ic_stat_city)
             .setContentTitle("Хуеград: слежу за упоминаниями")
-            .setContentText("Чтобы отключить, выключи «Проверка уведомлений» в аккаунте")
+            .setContentText("Чтобы отключить, выключи «Проверка уведомлений» в Настройках → Уведомления")
             .setContentIntent(open)
             .setOngoing(true)
             .setSilent(true)

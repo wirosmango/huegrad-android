@@ -27,6 +27,9 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.animation.animateColorAsState
 import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.res.painterResource
 import androidx.compose.foundation.shape.CircleShape
@@ -59,6 +62,7 @@ import ru.huegrad.app.forum.Post
 import ru.huegrad.app.forum.PostsState
 import ru.huegrad.app.forum.TopicViewModel
 import ru.huegrad.app.forum.UploadEvent
+import ru.huegrad.app.ui.DeepLink
 import ru.huegrad.app.ui.ForumAvatar
 import ru.huegrad.app.ui.MarkdownText
 import ru.huegrad.app.ui.NoInsets
@@ -148,6 +152,27 @@ fun TopicScreen(
         scrollToPost(index, ready.posts[index].number)
     }
 
+    // Профиль автора: открывается по нажатию на аватар или ник в сообщении
+    var profileOf by remember { mutableStateOf<Post?>(null) }
+    profileOf?.let { author ->
+        ForumProfileSheet(
+            nickname = author.nickname,
+            avatarUrl = author.avatarUrl,
+            authorUid = author.authorUid,
+            onDismiss = { profileOf = null },
+            onOpenPost = { target ->
+                profileOf = null
+                val posts = (state as? PostsState.Ready)?.posts.orEmpty()
+                val idx = posts.indexOfFirst { it.id == target.postId }
+                if (target.topicId == vm.topicId && idx >= 0) {
+                    scrollToPost(idx, posts[idx].number)
+                } else {
+                    DeepLink.pending = DeepLink.Target(target.topicId, target.postId, null)
+                }
+            },
+        )
+    }
+
     Scaffold(
         contentWindowInsets = NoInsets,
         topBar = {
@@ -173,14 +198,16 @@ fun TopicScreen(
             if (state is PostsState.Ready) {
                 // "floating": кнопки и поле парят над содержимым по отдельности; "minimal": плоская панель без рамок
                 val floating = AppSettings.inputStyle == "floating"
+                // В AMOLED-теме панель чисто чёрная: тональная подсветка поверхности (3dp) осветлила бы её до серого
+                val amoled = AppSettings.themeMode == "amoled"
                 Surface(
                     color = if (floating) Color.Transparent else MaterialTheme.colorScheme.surface,
-                    tonalElevation = if (floating) 0.dp else 3.dp,
+                    tonalElevation = if (floating || amoled) 0.dp else 3.dp,
                 ) {
                     Column(
                         Modifier
                             .windowInsetsPadding(WindowInsets.ime.union(WindowInsets.navigationBars))
-                            .padding(horizontal = 12.dp, vertical = if (floating) 8.dp else 6.dp),
+                            .padding(start = 12.dp, end = 12.dp, top = if (floating) 8.dp else 6.dp, bottom = if (floating) 8.dp else 2.dp),
                         verticalArrangement = Arrangement.spacedBy(8.dp),
                     ) {
                         if (suggestions.isNotEmpty()) {
@@ -188,14 +215,18 @@ fun TopicScreen(
                         }
                         if (myNick == null) {
                             ComposerBox(floating, RoundedCornerShape(24.dp), Modifier.fillMaxWidth()) {
-                                TextField(
-                                    value = nick,
-                                    onValueChange = { nick = it.take(30) },
-                                    placeholder = { Text("Ваш ник") },
-                                    singleLine = true,
-                                    colors = composerFieldColors(),
-                                    modifier = Modifier.fillMaxWidth(),
-                                )
+                                if (floating) {
+                                    TextField(
+                                        value = nick,
+                                        onValueChange = { nick = it.take(30) },
+                                        placeholder = { Text("Ваш ник") },
+                                        singleLine = true,
+                                        colors = composerFieldColors(),
+                                        modifier = Modifier.fillMaxWidth(),
+                                    )
+                                } else {
+                                    CompactField(nick, { nick = it.take(30) }, "Ваш ник", Modifier.fillMaxWidth(), singleLine = true)
+                                }
                             }
                         }
                         attachedUrl?.let { url ->
@@ -243,19 +274,23 @@ fun TopicScreen(
                                 }
                             }
                             ComposerBox(floating, RoundedCornerShape(24.dp), Modifier.weight(1f)) {
-                                TextField(
-                                    value = field,
-                                    onValueChange = {
-                                        val t = it.text.take(2000)
-                                        field = if (t.length == it.text.length) it else it.copy(text = t, selection = TextRange(t.length))
-                                    },
-                                    placeholder = { Text(if (myNick != null) "Сообщение" else "Текст...") },
-                                    colors = composerFieldColors(),
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .offset(x = if (floating) 0.dp else (-12).dp),
-                                    maxLines = 4,
-                                )
+                                val onFieldChange: (TextFieldValue) -> Unit = {
+                                    val t = it.text.take(2000)
+                                    field = if (t.length == it.text.length) it else it.copy(text = t, selection = TextRange(t.length))
+                                }
+                                val hint = if (myNick != null) "Сообщение" else "Текст..."
+                                if (floating) {
+                                    TextField(
+                                        value = field,
+                                        onValueChange = onFieldChange,
+                                        placeholder = { Text(hint) },
+                                        colors = composerFieldColors(),
+                                        modifier = Modifier.fillMaxWidth(),
+                                        maxLines = 4,
+                                    )
+                                } else {
+                                    CompactField(field, onFieldChange, hint, Modifier.fillMaxWidth(), maxLines = 4)
+                                }
                             }
                             val send: () -> Unit = {
                                 sending = true
@@ -277,15 +312,32 @@ fun TopicScreen(
                                     modifier = Modifier.size(56.dp),
                                 ) { Icon(Icons.AutoMirrored.Rounded.Send, contentDescription = "Отправить") }
                             } else {
-                                IconButton(
+                                // Заливка у кнопки появляется, только когда начался ввод (есть текст или фото)
+                                val hasInput = text.isNotBlank() || attachedUrl != null
+                                val primary = MaterialTheme.colorScheme.primary
+                                val fill by animateColorAsState(
+                                    if (hasInput) primary else primary.copy(alpha = 0f),
+                                    label = "sendFill",
+                                )
+                                val iconColor by animateColorAsState(
+                                    if (hasInput) MaterialTheme.colorScheme.onPrimary else primary,
+                                    label = "sendIcon",
+                                )
+                                FilledIconButton(
                                     onClick = send,
                                     enabled = canSend,
+                                    shape = CircleShape,
+                                    colors = IconButtonDefaults.filledIconButtonColors(
+                                        containerColor = fill,
+                                        contentColor = iconColor,
+                                        disabledContainerColor = fill,
+                                        disabledContentColor = iconColor,
+                                    ),
                                     modifier = Modifier.size(40.dp),
                                 ) {
                                     Icon(
                                         Icons.AutoMirrored.Rounded.Send,
                                         contentDescription = "Отправить",
-                                        tint = MaterialTheme.colorScheme.primary,
                                         modifier = Modifier.size(18.dp),
                                     )
                                 }
@@ -323,6 +375,7 @@ fun TopicScreen(
                                         val newText = "#${p.number} $text"
                                         field = TextFieldValue(newText, TextRange(newText.length))
                                     },
+                                    onProfileClick = { profileOf = p },
                                     onLike = { vm.like(p.id) },
                                     onRefClick = { n ->
                                         val idx = s.posts.indexOfFirst { it.number == n }
@@ -351,6 +404,58 @@ private fun ComposerBox(floating: Boolean, shape: Shape, modifier: Modifier = Mo
         )
     } else {
         Box(modifier) { content() }
+    }
+}
+
+/** Низкое поле ввода для «минимализма»: без внутренних отступов M3 TextField (у него минимум 56dp). */
+@Composable
+private fun CompactField(
+    value: TextFieldValue,
+    onValueChange: (TextFieldValue) -> Unit,
+    placeholder: String,
+    modifier: Modifier = Modifier,
+    maxLines: Int = 1,
+) {
+    BasicTextField(
+        value = value,
+        onValueChange = onValueChange,
+        modifier = modifier,
+        textStyle = MaterialTheme.typography.bodyLarge.copy(color = MaterialTheme.colorScheme.onSurface),
+        cursorBrush = SolidColor(MaterialTheme.colorScheme.primary),
+        maxLines = maxLines,
+        decorationBox = { inner -> CompactDecoration(value.text.isEmpty(), placeholder, inner) },
+    )
+}
+
+@Composable
+private fun CompactField(
+    value: String,
+    onValueChange: (String) -> Unit,
+    placeholder: String,
+    modifier: Modifier = Modifier,
+    singleLine: Boolean = false,
+) {
+    BasicTextField(
+        value = value,
+        onValueChange = onValueChange,
+        modifier = modifier,
+        textStyle = MaterialTheme.typography.bodyLarge.copy(color = MaterialTheme.colorScheme.onSurface),
+        cursorBrush = SolidColor(MaterialTheme.colorScheme.primary),
+        singleLine = singleLine,
+        decorationBox = { inner -> CompactDecoration(value.isEmpty(), placeholder, inner) },
+    )
+}
+
+@Composable
+private fun CompactDecoration(empty: Boolean, placeholder: String, inner: @Composable () -> Unit) {
+    Box(
+        Modifier.fillMaxWidth().heightIn(min = 40.dp).padding(horizontal = 8.dp, vertical = 8.dp),
+        contentAlignment = Alignment.CenterStart,
+    ) {
+        if (empty) {
+            Text(placeholder, style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        }
+        inner()
     }
 }
 
@@ -400,6 +505,7 @@ private fun PostCard(
     highlighted: Boolean,
     myNick: String?,
     onNumberClick: () -> Unit,
+    onProfileClick: () -> Unit,
     onLike: () -> Unit,
     onRefClick: (Int) -> Unit,
 ) {
@@ -412,15 +518,21 @@ private fun PostCard(
     ) {
         Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                ForumAvatar(nickname = post.nickname, photoUrl = post.avatarUrl, size = 36.dp)
-                Column(Modifier.weight(1f)) {
-                    Text(post.nickname, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
-                    Text(
-                        post.timeMs?.let { SimpleDateFormat("dd.MM.yyyy HH:mm", Locale.getDefault()).format(Date(it)) }
-                            ?: "только что",
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
+                Row(
+                    Modifier.weight(1f).clip(MaterialTheme.shapes.small).clickable(onClick = onProfileClick),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    ForumAvatar(nickname = post.nickname, photoUrl = post.avatarUrl, size = 36.dp)
+                    Column(Modifier.weight(1f)) {
+                        Text(post.nickname, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
+                        Text(
+                            post.timeMs?.let { SimpleDateFormat("dd.MM.yyyy HH:mm", Locale.getDefault()).format(Date(it)) }
+                                ?: "только что",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
                 }
                 Text(
                     "#${post.number}",

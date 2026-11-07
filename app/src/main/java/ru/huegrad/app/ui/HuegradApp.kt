@@ -62,6 +62,7 @@ import androidx.navigation.compose.rememberNavController
 import ru.huegrad.app.data.Content
 import ru.huegrad.app.ui.screens.ArticleScreen
 import ru.huegrad.app.ui.screens.DrochkaScreen
+import ru.huegrad.app.ui.screens.EasterEggScreen
 import ru.huegrad.app.ui.screens.EducationScreen
 import ru.huegrad.app.ui.screens.ForumScreen
 import ru.huegrad.app.ui.screens.HistoryScreen
@@ -270,7 +271,8 @@ fun HuegradApp() {
                 ) { TopicScreen(back, onOpenNotification = openNotification) }
                 composable(Dest.News.route) { NewsScreen(onOpen = openArticle) }
                 composable(Dest.More.route) { MoreScreen(onNavigate = { nav.navigate(it) }) }
-                composable("settings") { SettingsScreen(onBack = back) }
+                composable("settings") { SettingsScreen(onBack = back, onEasterEgg = { nav.navigate("easter") }) }
+                composable("easter") { EasterEggScreen(onBack = back) }
                 composable("drochka") { DrochkaScreen(back) }
                 composable("mods") { ModsScreen(back) }
                 composable("history") { HistoryScreen(back) }

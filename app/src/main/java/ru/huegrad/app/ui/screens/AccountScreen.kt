@@ -55,7 +55,6 @@ import com.google.firebase.auth.GoogleAuthProvider
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import ru.huegrad.app.forum.ForumIdentity
 import ru.huegrad.app.forum.ForumSession
-import ru.huegrad.app.forum.MentionService
 import ru.huegrad.app.ui.ForumAvatar
 
 /** Страница входа в аккаунт форума: на весь экран, поверх форума. */
@@ -195,28 +194,6 @@ private fun AccountPage(onDismiss: () -> Unit) {
                         user.email!!,
                         style = MaterialTheme.typography.bodyLarge,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                }
-                var background by remember { mutableStateOf(MentionService.isEnabled(context)) }
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(12.dp),
-                ) {
-                    Column(Modifier.weight(1f)) {
-                        Text("Проверка уведомлений", style = MaterialTheme.typography.titleMedium)
-                        Text(
-                            "Упоминания и ответы приходят в шторку и при свёрнутом приложении (в шторке будет постоянное тихое уведомление). Выключено: никаких фоновых проверок и уведомлений в шторке.",
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
-                    }
-                    Switch(
-                        checked = background,
-                        onCheckedChange = {
-                            background = it
-                            MentionService.setEnabled(context, it)
-                        },
                     )
                 }
                 Spacer(Modifier.height(8.dp))

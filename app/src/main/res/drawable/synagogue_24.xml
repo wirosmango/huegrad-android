@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Иконка synagogue (Material Symbols): 24dp, одноцветная, цвет задаёт система или tint -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="24"
+    android:viewportHeight="24">
+    <path
+        android:fillColor="#FFFFFFFF"
+        android:pathData="M1,21 V7 A3,3 0 0 1 7,7 V21 Z M3,8 H5 V7 A1,1 0 0 0 3,7 Z M3,19 H5 V10 H3 Z M1,8 H7 V10 H1 Z M1,19 H11 V21 H1 Z M17,21 V7 A3,3 0 0 1 23,7 V21 Z M19,8 H21 V7 A1,1 0 0 0 19,7 Z M19,19 H21 V10 H19 Z M17,8 H23 V10 H17 Z M13,19 H23 V21 H13 Z M9,19 V16 A3,3 0 0 1 15,16 V19 Z M11,19 H13 V16 A1,1 0 0 0 11,16 Z M12,2.5 L19.5,10 H4.5 Z M12,5.5 L7.5,10 H16.5 Z M10.65,10 A1.35,1.35 0 1 1 13.35,10 A1.35,1.35 0 1 1 10.65,10 Z" />
+</vector>

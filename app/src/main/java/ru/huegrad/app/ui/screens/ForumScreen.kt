@@ -20,9 +20,11 @@ import com.google.firebase.auth.FirebaseAuth
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import ru.huegrad.app.forum.AppNotification
+import ru.huegrad.app.forum.ForumSession
 import ru.huegrad.app.forum.ForumViewModel
 import ru.huegrad.app.forum.TopicsState
 import ru.huegrad.app.ui.AppSettings
+import ru.huegrad.app.ui.DeepLink
 import ru.huegrad.app.ui.FloatingBarSideInset
 import ru.huegrad.app.ui.ForumAvatar
 import ru.huegrad.app.ui.LocalBottomBarInset
@@ -38,6 +40,7 @@ fun ForumScreen(
     val state by vm.state.collectAsStateWithLifecycle()
     var showDialog by rememberSaveable { mutableStateOf(false) }
     var showAccount by rememberSaveable { mutableStateOf(false) }
+    var showProfile by rememberSaveable { mutableStateOf(false) }
 
     Scaffold(
         contentWindowInsets = NoInsets,
@@ -46,9 +49,11 @@ fun ForumScreen(
                 title = { Text("Форум") },
                 actions = {
                     NotificationBell(onOpen = onOpenNotification)
-                    IconButton(onClick = { showAccount = true }) {
-                        // Перечитываем пользователя после закрытия диалога входа или выхода
-                        val me = remember(showAccount) { runCatching { FirebaseAuth.getInstance().currentUser }.getOrNull() }
+                    // Перечитываем пользователя после закрытия диалога входа или выхода
+                    val me = remember(showAccount) { runCatching { FirebaseAuth.getInstance().currentUser }.getOrNull() }
+                    val signedIn = me != null && !me.isAnonymous
+                    // Вошедшему аватарка открывает профиль (как на экране темы), остальным страницу входа
+                    IconButton(onClick = { if (signedIn) showProfile = true else showAccount = true }) {
                         val photo = me?.photoUrl?.toString()
                         val name = me?.displayName.orEmpty()
                         if (me != null && !me.isAnonymous && (photo != null || name.isNotBlank())) {
@@ -110,6 +115,25 @@ fun ForumScreen(
     }
 
     if (showAccount) AccountDialog(onDismiss = { showAccount = false })
+
+    val currentUser = if (showProfile) runCatching { FirebaseAuth.getInstance().currentUser }.getOrNull() else null
+    if (currentUser != null && !currentUser.isAnonymous) {
+        val pinnedNick by ForumSession.nickname.collectAsStateWithLifecycle()
+        ForumProfileSheet(
+            nickname = pinnedNick ?: currentUser.displayName.orEmpty().ifBlank { currentUser.email.orEmpty() },
+            avatarUrl = currentUser.photoUrl?.toString(),
+            authorUid = currentUser.uid,
+            onDismiss = { showProfile = false },
+            onOpenPost = { target ->
+                showProfile = false
+                DeepLink.pending = DeepLink.Target(target.topicId, target.postId, null)
+            },
+            onManageAccount = {
+                showProfile = false
+                showAccount = true
+            },
+        )
+    }
 
     if (showDialog) NewTopicDialog(
         onDismiss = { showDialog = false },

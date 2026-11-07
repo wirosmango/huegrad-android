@@ -21,11 +21,262 @@
             android:exported="true"
             android:launchMode="singleTop"
             android:windowSoftInputMode="adjustResize">
+        </activity>
+
+        <!-- Значок приложения: включён ровно один алиас, остальные выключает AppIcon.apply() (настройки → иконка).
+             Стандартный: посёлок на зелёном фоне. -->
+
+        <activity-alias
+            android:name=".IconVillageGreen"
+            android:enabled="true"
+            android:exported="true"
+            android:icon="@mipmap/ic_launcher"
+            android:roundIcon="@mipmap/ic_launcher"
+            android:label="@string/app_name"
+            android:targetActivity=".MainActivity">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
-        </activity>
+        </activity-alias>
+
+        <activity-alias
+            android:name=".IconVillageBlue"
+            android:enabled="false"
+            android:exported="true"
+            android:icon="@mipmap/ic_launcher_village_blue"
+            android:roundIcon="@mipmap/ic_launcher_village_blue"
+            android:label="@string/app_name"
+            android:targetActivity=".MainActivity">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity-alias>
+
+        <activity-alias
+            android:name=".IconVillagePurple"
+            android:enabled="false"
+            android:exported="true"
+            android:icon="@mipmap/ic_launcher_village_purple"
+            android:roundIcon="@mipmap/ic_launcher_village_purple"
+            android:label="@string/app_name"
+            android:targetActivity=".MainActivity">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity-alias>
+
+        <activity-alias
+            android:name=".IconVillageRed"
+            android:enabled="false"
+            android:exported="true"
+            android:icon="@mipmap/ic_launcher_village_red"
+            android:roundIcon="@mipmap/ic_launcher_village_red"
+            android:label="@string/app_name"
+            android:targetActivity=".MainActivity">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity-alias>
+
+        <activity-alias
+            android:name=".IconVillageOrange"
+            android:enabled="false"
+            android:exported="true"
+            android:icon="@mipmap/ic_launcher_village_orange"
+            android:roundIcon="@mipmap/ic_launcher_village_orange"
+            android:label="@string/app_name"
+            android:targetActivity=".MainActivity">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity-alias>
+
+        <activity-alias
+            android:name=".IconVillageGraphite"
+            android:enabled="false"
+            android:exported="true"
+            android:icon="@mipmap/ic_launcher_village_graphite"
+            android:roundIcon="@mipmap/ic_launcher_village_graphite"
+            android:label="@string/app_name"
+            android:targetActivity=".MainActivity">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity-alias>
+
+        <activity-alias
+            android:name=".IconCityGreen"
+            android:enabled="false"
+            android:exported="true"
+            android:icon="@mipmap/ic_launcher_city_green"
+            android:roundIcon="@mipmap/ic_launcher_city_green"
+            android:label="@string/app_name"
+            android:targetActivity=".MainActivity">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity-alias>
+
+        <activity-alias
+            android:name=".IconCityBlue"
+            android:enabled="false"
+            android:exported="true"
+            android:icon="@mipmap/ic_launcher_city_blue"
+            android:roundIcon="@mipmap/ic_launcher_city_blue"
+            android:label="@string/app_name"
+            android:targetActivity=".MainActivity">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity-alias>
+
+        <activity-alias
+            android:name=".IconCityPurple"
+            android:enabled="false"
+            android:exported="true"
+            android:icon="@mipmap/ic_launcher_city_purple"
+            android:roundIcon="@mipmap/ic_launcher_city_purple"
+            android:label="@string/app_name"
+            android:targetActivity=".MainActivity">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity-alias>
+
+        <activity-alias
+            android:name=".IconCityRed"
+            android:enabled="false"
+            android:exported="true"
+            android:icon="@mipmap/ic_launcher_city_red"
+            android:roundIcon="@mipmap/ic_launcher_city_red"
+            android:label="@string/app_name"
+            android:targetActivity=".MainActivity">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity-alias>
+
+        <activity-alias
+            android:name=".IconCityOrange"
+            android:enabled="false"
+            android:exported="true"
+            android:icon="@mipmap/ic_launcher_city_orange"
+            android:roundIcon="@mipmap/ic_launcher_city_orange"
+            android:label="@string/app_name"
+            android:targetActivity=".MainActivity">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity-alias>
+
+        <activity-alias
+            android:name=".IconCityGraphite"
+            android:enabled="false"
+            android:exported="true"
+            android:icon="@mipmap/ic_launcher_city_graphite"
+            android:roundIcon="@mipmap/ic_launcher_city_graphite"
+            android:label="@string/app_name"
+            android:targetActivity=".MainActivity">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity-alias>
+
+        <activity-alias
+            android:name=".IconSynagogueGreen"
+            android:enabled="false"
+            android:exported="true"
+            android:icon="@mipmap/ic_launcher_synagogue_green"
+            android:roundIcon="@mipmap/ic_launcher_synagogue_green"
+            android:label="@string/app_name"
+            android:targetActivity=".MainActivity">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity-alias>
+
+        <activity-alias
+            android:name=".IconSynagogueBlue"
+            android:enabled="false"
+            android:exported="true"
+            android:icon="@mipmap/ic_launcher_synagogue_blue"
+            android:roundIcon="@mipmap/ic_launcher_synagogue_blue"
+            android:label="@string/app_name"
+            android:targetActivity=".MainActivity">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity-alias>
+
+        <activity-alias
+            android:name=".IconSynagoguePurple"
+            android:enabled="false"
+            android:exported="true"
+            android:icon="@mipmap/ic_launcher_synagogue_purple"
+            android:roundIcon="@mipmap/ic_launcher_synagogue_purple"
+            android:label="@string/app_name"
+            android:targetActivity=".MainActivity">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity-alias>
+
+        <activity-alias
+            android:name=".IconSynagogueRed"
+            android:enabled="false"
+            android:exported="true"
+            android:icon="@mipmap/ic_launcher_synagogue_red"
+            android:roundIcon="@mipmap/ic_launcher_synagogue_red"
+            android:label="@string/app_name"
+            android:targetActivity=".MainActivity">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity-alias>
+
+        <activity-alias
+            android:name=".IconSynagogueOrange"
+            android:enabled="false"
+            android:exported="true"
+            android:icon="@mipmap/ic_launcher_synagogue_orange"
+            android:roundIcon="@mipmap/ic_launcher_synagogue_orange"
+            android:label="@string/app_name"
+            android:targetActivity=".MainActivity">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity-alias>
+
+        <activity-alias
+            android:name=".IconSynagogueGraphite"
+            android:enabled="false"
+            android:exported="true"
+            android:icon="@mipmap/ic_launcher_synagogue_graphite"
+            android:roundIcon="@mipmap/ic_launcher_synagogue_graphite"
+            android:label="@string/app_name"
+            android:targetActivity=".MainActivity">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity-alias>
 
         <service
             android:name=".forum.MentionService"

@@ -1,16 +1,16 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Иконка holiday_village, увеличена в 3 раза и по центру безопасной зоны адаптивной иконки.
-     Этот же слой используется как monochrome для тематической иконки Pixel (Android 13+): важна только форма. -->
+<!-- Иконка holiday_village (по умолчанию). Размер подобран так, чтобы углы не обрезались круглой маской лаунчера (безопасная зона 66dp).
+     Этот же слой используется как monochrome для тематических значков (Android 13+): важна только форма. -->
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
     android:width="108dp"
     android:height="108dp"
     android:viewportWidth="108"
     android:viewportHeight="108">
     <group
-        android:scaleX="3"
-        android:scaleY="3"
-        android:translateX="18"
-        android:translateY="18">
+        android:scaleX="2.75"
+        android:scaleY="2.75"
+        android:translateX="21.0"
+        android:translateY="21.0">
         <path
             android:fillColor="#FFFFFFFF"
             android:pathData="M8,4 L14,10 V20 H2 V10 Z M8,6.83 L4,10.83 V18 H12 V10.83 Z M7,11 H9 V13 H7 Z M7,15 H9 V18.5 H7 Z M11,4 H14 L18,8 V20 H16 V9 Z M17,4 H20 L22,6 V20 H20 V7 Z" />
