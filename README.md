@@ -3,7 +3,7 @@
 
 ## Скриншоты
 
-<img width="225" height="500" alt="5435862952767594963_119" src="https://github.com/user-attachments/assets/0812cce6-b536-481d-a1f3-28487175fd81" />
+<img width="225" height="500" alt="5440366552394964788_119" src="https://github.com/user-attachments/assets/44b64949-0ca1-4b8b-b67c-713d511bb8f7" />
 <img width="225" height="500" alt="5431712966387637369_119" src="https://github.com/user-attachments/assets/ff80de4a-0f95-4afa-85b6-978249cfdf4c" />
 <img width="225" height="500" alt="5431712966387637368_119" src="https://github.com/user-attachments/assets/93f54ba6-02c0-4305-872b-42e02a32d2d2" />
 <img width="225" height="500" alt="5431712966387637367_119" src="https://github.com/user-attachments/assets/7363c795-727a-421b-afe8-0fd904eb4c99" />
