@@ -3,11 +3,11 @@
 
 ## Скриншоты
 
-<img width="225" height="500" alt="5440366552394964788_119" src="https://github.com/user-attachments/assets/44b64949-0ca1-4b8b-b67c-713d511bb8f7" />
-<img width="225" height="500" alt="5431712966387637369_119" src="https://github.com/user-attachments/assets/ff80de4a-0f95-4afa-85b6-978249cfdf4c" />
+<img width="225" height="500" alt="5453876582477929859_119" src="https://github.com/user-attachments/assets/af490420-7f8e-4780-b679-3d40db98ed66" />
+<img width="225" height="500" alt="5453876582477929858_119" src="https://github.com/user-attachments/assets/4207a4b5-fb02-4cad-bb96-d8a4884dbdf1" />
 <img width="225" height="500" alt="5431712966387637368_119" src="https://github.com/user-attachments/assets/93f54ba6-02c0-4305-872b-42e02a32d2d2" />
 <img width="225" height="500" alt="5431712966387637367_119" src="https://github.com/user-attachments/assets/7363c795-727a-421b-afe8-0fd904eb4c99" />
-<img width="225" height="500" alt="5431712966387637366_119" src="https://github.com/user-attachments/assets/628e803b-e9e1-4a41-8e48-b93869b0fc24" />
+<img width="225" height="500" alt="5453876582477929857_119" src="https://github.com/user-attachments/assets/ae250ad4-91c7-48df-ad4d-0aa5c7151c08" />
 
 ## Ручная сборка
 1. `app/google-services.json` из Firebase Console (package `ru.huegrad.app`): скопируйте `app/google-services.json.example` и замените значениями своего проекта, либо скачайте файл из Firebase. Файл в репозиторий не попадает. Без него приложение собирается, форум покажет подсказку. Для входа через Google включите его в Authentication и добавьте SHA-1 и SHA-256 ключа подписи, затем скачайте файл заново.
