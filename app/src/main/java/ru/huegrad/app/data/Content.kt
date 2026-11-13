@@ -87,7 +87,7 @@ object Content {
         Track(title = "Вижу парня", artist = "пидор", uri = resUri("raw", "bachu")),
         Track(title = "Мне похуй нахуй", artist = "DEE-1", uri = resUri("raw", "pohuinahui")),
         Track(title = "Нарезка кебабов", artist = "бошнякорезы", uri = resUri("raw", "strongkebab")),
-        Track(title = "Показушник", artist = "ровный пацанчик", uri = resUri("raw", "rovnyj"))
+        Track(title = "Показушник", artist = "рваный пацанчик", uri = resUri("raw", "rovnyj"))
 
 
     )

@@ -244,6 +244,13 @@ private fun NavigationSettings() {
             subtitle = "Показывать подложку и тень панели",
             checked = AppSettings.navPanelBackground,
             onChange = { AppSettings.setNavPanelBackground(context, it) },
+            showDivider = true,
+        )
+        SwitchItem(
+            title = "Матовое стекло",
+            subtitle = "Размытие фона под плавающей панелью навигации и панелью ввода на форуме (размытие работает на Android 12 и новее)",
+            checked = AppSettings.navGlass,
+            onChange = { AppSettings.setNavGlass(context, it) },
         )
     }
 

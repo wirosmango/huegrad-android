@@ -13,7 +13,9 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
+import androidx.compose.material.icons.rounded.AddPhotoAlternate
 import androidx.compose.material.icons.rounded.Close
+import androidx.compose.material.icons.rounded.Poll
 import androidx.compose.material.icons.rounded.Menu
 import ru.huegrad.app.ui.AppSettings
 import androidx.compose.material.icons.automirrored.rounded.Send
@@ -26,10 +28,24 @@ import androidx.compose.foundation.clickable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import dev.chrisbanes.haze.HazeState
+import dev.chrisbanes.haze.HazeTint
+import dev.chrisbanes.haze.hazeEffect
+import dev.chrisbanes.haze.hazeSource
+import dev.chrisbanes.haze.rememberHazeState
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.shrinkHorizontally
+import androidx.compose.animation.scaleOut
+import androidx.compose.animation.scaleIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.expandHorizontally
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.res.painterResource
 import androidx.compose.foundation.shape.CircleShape
@@ -60,9 +76,22 @@ import ru.huegrad.app.forum.ForumSession
 import ru.huegrad.app.forum.MentionToken
 import ru.huegrad.app.forum.Post
 import ru.huegrad.app.forum.PostsState
+import ru.huegrad.app.forum.PollResult
 import ru.huegrad.app.forum.TopicViewModel
 import ru.huegrad.app.forum.UploadEvent
 import ru.huegrad.app.ui.DeepLink
+import ru.huegrad.app.ui.VideoCard
+import ru.huegrad.app.forum.MAX_ATTACHMENTS
+import ru.huegrad.app.forum.feedImageUrl
+import ru.huegrad.app.forum.UploadStatus
+import ru.huegrad.app.ui.postMedia
+import ru.huegrad.app.ui.PlayBadge
+import ru.huegrad.app.ui.MediaViewer
+import ru.huegrad.app.ui.ForumMedia
+import ru.huegrad.app.forum.videoThumbnailUrl
+import ru.huegrad.app.forum.isVideoUrl
+import androidx.compose.material.icons.rounded.Videocam
+import ru.huegrad.app.ui.frostedGlass
 import ru.huegrad.app.ui.ForumAvatar
 import ru.huegrad.app.ui.MarkdownText
 import ru.huegrad.app.ui.NoInsets
@@ -79,16 +108,25 @@ fun TopicScreen(
     val state by vm.state.collectAsStateWithLifecycle()
     val title by vm.title.collectAsStateWithLifecycle()
     val liked by vm.liked.collectAsStateWithLifecycle()
-    val uploading by vm.uploading.collectAsStateWithLifecycle()
+    val attachments by vm.attachments.collectAsStateWithLifecycle()
+    val uploading = attachments.any { it.status == UploadStatus.UPLOADING }
+    // Полноэкранный просмотр медиа: список медиа сообщения и номер открытого
+    var viewer by remember { mutableStateOf<Pair<List<ForumMedia>, Int>?>(null) }
+    val pollResults by vm.pollResults.collectAsStateWithLifecycle()
     // Ник вошедшего закреплён за аккаунтом, гость вводит ник сам
     val myNick by ForumSession.nickname.collectAsStateWithLifecycle()
+    val signedIn = rememberSignedIn()
+    var showAccount by remember { mutableStateOf(false) }
 
-    var nick by rememberSaveable { mutableStateOf("Аноним") }
     var field by rememberSaveable(stateSaver = TextFieldValue.Saver) { mutableStateOf(TextFieldValue("")) }
     val text = field.text
     var sending by remember { mutableStateOf(false) }
+    // Выставляется при отправке своего сообщения: список прокрутится к нему, даже если читали старые
+    var stickToEnd by remember { mutableStateOf(false) }
+    // Матовое стекло: лента сообщений уходит под плавающую панель ввода и размывается под ней
+    val hazeState = rememberHazeState()
+    val glassInput = AppSettings.inputStyle == "floating" && AppSettings.navGlass
     // Загруженное фото ждёт отправки: превью над полем вместо ссылки в тексте
-    var attachedUrl by rememberSaveable { mutableStateOf<String?>(null) }
     var highlighted by remember { mutableStateOf<Int?>(null) }
     // Пост, к которому надо прокрутить (переход из уведомления)
     var pendingPostId by rememberSaveable { mutableStateOf(vm.initialPostId) }
@@ -99,8 +137,8 @@ fun TopicScreen(
     val scope = rememberCoroutineScope()
 
     // Системный выбор фото (не требует разрешений)
-    val pickPhoto = rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) { uri ->
-        if (uri != null) vm.uploadImage(uri)
+    val pickPhoto = rememberLauncherForActivityResult(ActivityResultContracts.PickMultipleVisualMedia(MAX_ATTACHMENTS)) { uris ->
+        if (uris.isNotEmpty()) vm.addAttachments(uris)
     }
 
     // Готовое фото показывается превью над полем и уходит вместе с сообщением
@@ -108,7 +146,6 @@ fun TopicScreen(
         vm.uploadEvents.collect { event ->
             when (event) {
                 is UploadEvent.Failed -> Toast.makeText(context, event.message, Toast.LENGTH_LONG).show()
-                is UploadEvent.Done -> attachedUrl = event.url
             }
         }
     }
@@ -143,6 +180,15 @@ fun TopicScreen(
         }
     }
 
+    // Новое сообщение внизу: прокручиваем к нему, если читаем самый низ или только что отправили своё
+    val newestId = (state as? PostsState.Ready)?.posts?.firstOrNull()?.id
+    LaunchedEffect(newestId) {
+        if (newestId != null && (stickToEnd || listState.firstVisibleItemIndex <= 1)) {
+            listState.animateScrollToItem(0)
+        }
+        stickToEnd = false
+    }
+
     LaunchedEffect(pendingPostId, state) {
         val id = pendingPostId ?: return@LaunchedEffect
         val ready = state as? PostsState.Ready ?: return@LaunchedEffect
@@ -150,6 +196,33 @@ fun TopicScreen(
         if (index < 0) return@LaunchedEffect
         pendingPostId = null
         scrollToPost(index, ready.posts[index].number)
+    }
+
+    if (showAccount) AccountDialog(onDismiss = { showAccount = false })
+    viewer?.let { (items, start) -> MediaViewer(items, start, onDismiss = { viewer = null }) }
+
+    // Создание опроса из меню вложений
+    var showPoll by remember { mutableStateOf(false) }
+    if (showPoll) {
+        PollDialog(
+            onDismiss = { showPoll = false },
+            onCreate = { question, options ->
+                if (myNick == null) {
+                    Toast.makeText(context, "Писать могут только вошедшие в аккаунт", Toast.LENGTH_SHORT).show()
+                } else {
+                    showPoll = false
+                    sending = true
+                    stickToEnd = true
+                    vm.sendPoll(myNick.orEmpty(), question, options) { error ->
+                        sending = false
+                        if (error != null) {
+                            stickToEnd = false
+                            Toast.makeText(context, error, Toast.LENGTH_LONG).show()
+                        }
+                    }
+                }
+            },
+        )
     }
 
     // Профиль автора: открывается по нажатию на аватар или ник в сообщении
@@ -195,7 +268,9 @@ fun TopicScreen(
             )
         },
         bottomBar = {
-            if (state is PostsState.Ready) {
+            if (state is PostsState.Ready && !signedIn) {
+                GuestPromptBar(onSignIn = { showAccount = true })
+            } else if (state is PostsState.Ready) {
                 // "floating": кнопки и поле парят над содержимым по отдельности; "minimal": плоская панель без рамок
                 val floating = AppSettings.inputStyle == "floating"
                 // В AMOLED-теме панель чисто чёрная: тональная подсветка поверхности (3dp) осветлила бы её до серого
@@ -213,67 +288,149 @@ fun TopicScreen(
                         if (suggestions.isNotEmpty()) {
                             MentionSuggestions(suggestions, onPick = ::pickMention)
                         }
-                        if (myNick == null) {
-                            ComposerBox(floating, RoundedCornerShape(24.dp), Modifier.fillMaxWidth()) {
-                                if (floating) {
-                                    TextField(
-                                        value = nick,
-                                        onValueChange = { nick = it.take(30) },
-                                        placeholder = { Text("Ваш ник") },
-                                        singleLine = true,
-                                        colors = composerFieldColors(),
-                                        modifier = Modifier.fillMaxWidth(),
-                                    )
-                                } else {
-                                    CompactField(nick, { nick = it.take(30) }, "Ваш ник", Modifier.fillMaxWidth(), singleLine = true)
+                        if (attachments.isNotEmpty()) {
+                            Row(Modifier.padding(top = 4.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                attachments.forEach { att ->
+                                    Box(Modifier.size(72.dp)) {
+                                        Box(
+                                            Modifier
+                                                .fillMaxSize()
+                                                .clip(MaterialTheme.shapes.medium)
+                                                .background(MaterialTheme.colorScheme.surfaceContainerHighest),
+                                            contentAlignment = Alignment.Center,
+                                        ) {
+                                            val done = att.result
+                                            val model: Any? = when {
+                                                done != null -> if (done.isVideo) videoThumbnailUrl(done.url) else feedImageUrl(done.url)
+                                                !att.isVideo -> att.previewUri
+                                                else -> null
+                                            }
+                                            if (model != null) {
+                                                AsyncImage(
+                                                    model = model,
+                                                    contentDescription = null,
+                                                    contentScale = ContentScale.Crop,
+                                                    modifier = Modifier.fillMaxSize(),
+                                                )
+                                            }
+                                            if (att.isVideo) PlayBadge(Modifier.size(32.dp))
+                                            if (att.status == UploadStatus.UPLOADING) {
+                                                Box(
+                                                    Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.4f)),
+                                                    contentAlignment = Alignment.Center,
+                                                ) {
+                                                    CircularProgressIndicator(
+                                                        progress = { att.progress },
+                                                        modifier = Modifier.size(28.dp),
+                                                        strokeWidth = 2.5.dp,
+                                                        color = Color.White,
+                                                    )
+                                                }
+                                            }
+                                        }
+                                        FilledTonalIconButton(
+                                            onClick = { vm.removeAttachment(att.id) },
+                                            modifier = Modifier.align(Alignment.TopEnd).padding(2.dp).size(24.dp),
+                                        ) { Icon(Icons.Rounded.Close, contentDescription = "Убрать вложение", Modifier.size(14.dp)) }
+                                    }
                                 }
                             }
                         }
-                        attachedUrl?.let { url ->
-                            Box(Modifier.padding(top = 4.dp)) {
-                                AsyncImage(
-                                    model = url,
-                                    contentDescription = "Прикреплённое фото",
-                                    contentScale = ContentScale.Crop,
-                                    modifier = Modifier.size(96.dp).clip(MaterialTheme.shapes.medium),
-                                )
-                                FilledTonalIconButton(
-                                    onClick = { attachedUrl = null },
-                                    modifier = Modifier.align(Alignment.TopEnd).padding(4.dp).size(28.dp),
-                                ) { Icon(Icons.Rounded.Close, contentDescription = "Убрать фото", Modifier.size(16.dp)) }
-                            }
-                        }
-                        Row(
-                            verticalAlignment = if (floating) Alignment.Bottom else Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(if (floating) 8.dp else 4.dp),
-                        ) {
-                            ComposerBox(floating, CircleShape, Modifier.size(if (floating) 56.dp else 40.dp)) {
+                        val gap = if (floating) 8.dp else 4.dp
+                        Row(verticalAlignment = if (floating) Alignment.Bottom else Alignment.CenterVertically) {
+                            ComposerBox(floating, hazeState, CircleShape, Modifier.size(if (floating) 56.dp else 40.dp)) {
                                 Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                                    if (uploading) {
-                                        CircularProgressIndicator(Modifier.size(if (floating) 24.dp else 20.dp), strokeWidth = 2.5.dp)
-                                    } else {
-                                        IconButton(onClick = {
-                                            if (CloudinaryUploader.isConfigured) {
-                                                pickPhoto.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
-                                            } else {
-                                                Toast.makeText(
-                                                    context,
-                                                    "Cloudinary не настроен: добавьте cloudinary.cloudName и cloudinary.uploadPreset в local.properties",
-                                                    Toast.LENGTH_LONG,
-                                                ).show()
+                                    run {
+                                        // Меню вложений: фото, видео (только вошедшим) и опрос
+                                        var attachMenu by remember { mutableStateOf(false) }
+                                        Box {
+                                            IconButton(onClick = { attachMenu = true }) {
+                                                Icon(
+                                                    // В минималистичной панели иконки Solar (outline), в плавающей прежние
+                                                    painterResource(if (floating) R.drawable.ic_attach_plus else R.drawable.ic_solar_paperclip),
+                                                    contentDescription = "Прикрепить",
+                                                    modifier = Modifier.size(if (floating) 24.dp else 22.dp),
+                                                    tint = if (floating) LocalContentColor.current else MaterialTheme.colorScheme.primary,
+                                                )
                                             }
-                                        }) {
-                                            Icon(
-                                                painterResource(R.drawable.ic_attach_plus),
-                                                contentDescription = "Прикрепить фото",
-                                                modifier = Modifier.size(if (floating) 24.dp else 18.dp),
-                                                tint = if (floating) LocalContentColor.current else MaterialTheme.colorScheme.primary,
-                                            )
+                                            DropdownMenu(expanded = attachMenu, onDismissRequest = { attachMenu = false }) {
+                                                DropdownMenuItem(
+                                                    text = {
+                                                        Column {
+                                                            Text("Фото")
+                                                            if (myNick == null) {
+                                                                Text(
+                                                                    "только после входа в аккаунт",
+                                                                    style = MaterialTheme.typography.labelSmall,
+                                                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                                                )
+                                                            }
+                                                        }
+                                                    },
+                                                    leadingIcon = {
+                                                        if (floating) {
+                                                            Icon(Icons.Rounded.AddPhotoAlternate, contentDescription = null)
+                                                        } else {
+                                                            Icon(painterResource(R.drawable.ic_solar_gallery_add), contentDescription = null)
+                                                        }
+                                                    },
+                                                    enabled = myNick != null && attachments.size < MAX_ATTACHMENTS,
+                                                    onClick = {
+                                                        attachMenu = false
+                                                        if (CloudinaryUploader.isConfigured) {
+                                                            pickPhoto.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
+                                                        } else {
+                                                            Toast.makeText(
+                                                                context,
+                                                                "Cloudinary не настроен: добавьте cloudinary.cloudName и cloudinary.uploadPreset в local.properties",
+                                                                Toast.LENGTH_LONG,
+                                                            ).show()
+                                                        }
+                                                    },
+                                                )
+                                                DropdownMenuItem(
+                                                    text = { Text("Видео") },
+                                                    leadingIcon = {
+                                                        if (floating) {
+                                                            Icon(Icons.Rounded.Videocam, contentDescription = null)
+                                                        } else {
+                                                            Icon(painterResource(R.drawable.ic_solar_clapperboard_play), contentDescription = null)
+                                                        }
+                                                    },
+                                                    enabled = myNick != null && attachments.size < MAX_ATTACHMENTS,
+                                                    onClick = {
+                                                        attachMenu = false
+                                                        if (CloudinaryUploader.isConfigured) {
+                                                            pickPhoto.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.VideoOnly))
+                                                        } else {
+                                                            Toast.makeText(
+                                                                context,
+                                                                "Cloudinary не настроен: добавьте cloudinary.cloudName и cloudinary.uploadPreset в local.properties",
+                                                                Toast.LENGTH_LONG,
+                                                            ).show()
+                                                        }
+                                                    },
+                                                )
+                                                DropdownMenuItem(
+                                                    text = { Text("Опрос") },
+                                                    leadingIcon = {
+                                                        if (floating) {
+                                                            Icon(Icons.Rounded.Poll, contentDescription = null)
+                                                        } else {
+                                                            Icon(painterResource(R.drawable.ic_solar_chart_square), contentDescription = null)
+                                                        }
+                                                    },
+                                                    onClick = {
+                                                        attachMenu = false
+                                                        showPoll = true
+                                                    },
+                                                )
+                                            }
                                         }
                                     }
                                 }
                             }
-                            ComposerBox(floating, RoundedCornerShape(24.dp), Modifier.weight(1f)) {
+                            ComposerBox(floating, hazeState, RoundedCornerShape(12.dp), Modifier.weight(1f).padding(start = gap)) {
                                 val onFieldChange: (TextFieldValue) -> Unit = {
                                     val t = it.text.take(2000)
                                     field = if (t.length == it.text.length) it else it.copy(text = t, selection = TextRange(t.length))
@@ -294,52 +451,49 @@ fun TopicScreen(
                             }
                             val send: () -> Unit = {
                                 sending = true
-                                vm.send(myNick ?: nick, text, attachedUrl) { error ->
+                                stickToEnd = true
+                                vm.send(myNick.orEmpty(), text) { error ->
                                     sending = false
                                     if (error == null) {
                                         field = TextFieldValue("")
-                                        attachedUrl = null
                                     }
-                                    else Toast.makeText(context, error, Toast.LENGTH_LONG).show()
+                                    else {
+                                        stickToEnd = false
+                                        Toast.makeText(context, error, Toast.LENGTH_LONG).show()
+                                    }
                                 }
                             }
-                            val canSend = (myNick != null || nick.isNotBlank()) && (text.isNotBlank() || attachedUrl != null) && !sending && !uploading
-                            if (floating) {
-                                FilledIconButton(
-                                    onClick = send,
-                                    enabled = canSend,
-                                    shape = MaterialShapes.Cookie12Sided.toShape(),
-                                    modifier = Modifier.size(56.dp),
-                                ) { Icon(Icons.AutoMirrored.Rounded.Send, contentDescription = "Отправить") }
-                            } else {
-                                // Заливка у кнопки появляется, только когда начался ввод (есть текст или фото)
-                                val hasInput = text.isNotBlank() || attachedUrl != null
-                                val primary = MaterialTheme.colorScheme.primary
-                                val fill by animateColorAsState(
-                                    if (hasInput) primary else primary.copy(alpha = 0f),
-                                    label = "sendFill",
-                                )
-                                val iconColor by animateColorAsState(
-                                    if (hasInput) MaterialTheme.colorScheme.onPrimary else primary,
-                                    label = "sendIcon",
-                                )
-                                FilledIconButton(
-                                    onClick = send,
-                                    enabled = canSend,
-                                    shape = CircleShape,
-                                    colors = IconButtonDefaults.filledIconButtonColors(
-                                        containerColor = fill,
-                                        contentColor = iconColor,
-                                        disabledContainerColor = fill,
-                                        disabledContentColor = iconColor,
-                                    ),
-                                    modifier = Modifier.size(40.dp),
-                                ) {
-                                    Icon(
-                                        Icons.AutoMirrored.Rounded.Send,
-                                        contentDescription = "Отправить",
-                                        modifier = Modifier.size(18.dp),
-                                    )
+                            val canSend = myNick != null && (text.isNotBlank() || attachments.isNotEmpty()) && !sending && !uploading
+                            // Кнопка отправки скрыта, пока в поле нет текста (и нет фото), и плавно появляется с первым символом
+                            val hasInput = text.isNotBlank() || attachments.isNotEmpty()
+                            AnimatedVisibility(
+                                visible = hasInput,
+                                enter = fadeIn() + scaleIn(initialScale = 0.6f) + expandHorizontally(expandFrom = Alignment.Start),
+                                exit = fadeOut() + scaleOut(targetScale = 0.6f) + shrinkHorizontally(shrinkTowards = Alignment.Start),
+                            ) {
+                                Row {
+                                    Spacer(Modifier.width(gap))
+                                    if (floating) {
+                                        FilledIconButton(
+                                            onClick = send,
+                                            enabled = canSend,
+                                            shape = MaterialShapes.Cookie12Sided.toShape(),
+                                            modifier = Modifier.size(56.dp),
+                                        ) { Icon(Icons.AutoMirrored.Rounded.Send, contentDescription = "Отправить") }
+                                    } else {
+                                        FilledIconButton(
+                                            onClick = send,
+                                            enabled = canSend,
+                                            shape = CircleShape,
+                                            modifier = Modifier.size(40.dp),
+                                        ) {
+                                            Icon(
+                                                painterResource(R.drawable.ic_solar_plain),
+                                                contentDescription = "Отправить",
+                                                modifier = Modifier.size(20.dp),
+                                            )
+                                        }
+                                    }
                                 }
                             }
                         }
@@ -348,7 +502,12 @@ fun TopicScreen(
             }
         },
     ) { pad ->
-        Box(Modifier.padding(pad).fillMaxSize()) {
+        Box(
+            Modifier
+                .padding(top = pad.calculateTopPadding(), bottom = if (glassInput) 0.dp else pad.calculateBottomPadding())
+                .fillMaxSize()
+                .then(if (glassInput) Modifier.hazeSource(hazeState) else Modifier),
+        ) {
             when (val s = state) {
                 PostsState.Loading -> LoadingIndicator(Modifier.align(Alignment.Center))
                 PostsState.NotConfigured -> Hint(
@@ -362,7 +521,15 @@ fun TopicScreen(
                     } else {
                         LazyColumn(
                             state = listState,
-                            contentPadding = PaddingValues(16.dp),
+                            // Как в мессенджерах: самые новые сообщения снизу, прокрутка вверх открывает более старые
+                            reverseLayout = true,
+                            // Под стеклянной панелью список идёт до самого низа, поэтому последний пост приподнят на её высоту
+                            contentPadding = PaddingValues(
+                                start = 16.dp,
+                                end = 16.dp,
+                                top = 16.dp,
+                                bottom = 16.dp + if (glassInput) pad.calculateBottomPadding() else 0.dp,
+                            ),
                             verticalArrangement = Arrangement.spacedBy(8.dp),
                         ) {
                             items(s.posts, key = { it.id }) { p ->
@@ -371,10 +538,20 @@ fun TopicScreen(
                                     liked = p.id in liked,
                                     highlighted = highlighted == p.number,
                                     myNick = myNick,
+                                    pollResult = pollResults[p.id],
+                                    onVote = { option ->
+                                        // Голосовать могут только вошедшие: гостю открывается окно входа
+                                        if (!signedIn) {
+                                            showAccount = true
+                                        } else {
+                                            vm.vote(p.id, option) { error -> Toast.makeText(context, error, Toast.LENGTH_LONG).show() }
+                                        }
+                                    },
                                     onNumberClick = {
                                         val newText = "#${p.number} $text"
                                         field = TextFieldValue(newText, TextRange(newText.length))
                                     },
+                                    onOpenMedia = { items, index -> viewer = items to index },
                                     onProfileClick = { profileOf = p },
                                     onLike = { vm.like(p.id) },
                                     onRefClick = { n ->
@@ -391,10 +568,46 @@ fun TopicScreen(
     }
 }
 
+/** Вместо панели ввода для гостя: писать могут только вошедшие в аккаунт. */
+@Composable
+private fun GuestPromptBar(onSignIn: () -> Unit) {
+    Surface(
+        color = MaterialTheme.colorScheme.surface,
+        tonalElevation = if (AppSettings.themeMode == "amoled") 0.dp else 3.dp,
+    ) {
+        Row(
+            Modifier
+                .windowInsetsPadding(WindowInsets.ime.union(WindowInsets.navigationBars))
+                .padding(horizontal = 16.dp, vertical = 8.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            Text(
+                "Войдите, чтобы писать сообщения",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.weight(1f),
+            )
+            Button(onClick = onSignIn) { Text("Войти") }
+        }
+    }
+}
+
 /** Подложка элемента панели ввода: у "плавающей" панели белая плашка с тенью, у "минимализма" её нет. */
 @Composable
-private fun ComposerBox(floating: Boolean, shape: Shape, modifier: Modifier = Modifier, content: @Composable () -> Unit) {
-    if (floating) {
+private fun ComposerBox(
+    floating: Boolean,
+    haze: HazeState,
+    shape: Shape,
+    modifier: Modifier = Modifier,
+    content: @Composable () -> Unit,
+) {
+    if (floating && AppSettings.navGlass) {
+        // Матовое стекло: фон ленты размывается под плашкой (см. frostedGlass)
+        Box(modifier.frostedGlass(haze, shape)) {
+            CompositionLocalProvider(LocalContentColor provides MaterialTheme.colorScheme.onSurface) { content() }
+        }
+    } else if (floating) {
         Surface(
             shape = shape,
             color = MaterialTheme.colorScheme.surfaceContainerHigh,
@@ -504,6 +717,9 @@ private fun PostCard(
     liked: Boolean,
     highlighted: Boolean,
     myNick: String?,
+    pollResult: PollResult?,
+    onVote: (Int) -> Unit,
+    onOpenMedia: (List<ForumMedia>, Int) -> Unit,
     onNumberClick: () -> Unit,
     onProfileClick: () -> Unit,
     onLike: () -> Unit,
@@ -541,14 +757,41 @@ private fun PostCard(
                     modifier = Modifier.clickable(onClick = onNumberClick),
                 )
             }
-            if (post.message.isNotBlank()) MarkdownText(post.message, onRefClick, myNick = myNick)
+            // Все картинки и видео сообщения: по нажатию открывается галерея на нужном месте
+            val media = remember(post.message, post.images, post.attachments) { postMedia(post.message, post.images, post.attachments) }
+            val openMedia: (String) -> Unit = { url -> onOpenMedia(media, media.indexOfFirst { it.url == url }.coerceAtLeast(0)) }
+            // У опроса message дублирует вопрос и варианты для сайта, в приложении рисуется карточка опроса
+            if (post.poll != null) {
+                PollCard(post.poll, pollResult, onVote)
+            } else if (post.message.isNotBlank()) {
+                MarkdownText(post.message, onRefClick, myNick = myNick, onMediaClick = openMedia)
+            }
             post.images.forEach { url ->
                 AsyncImage(
                     model = url,
                     contentDescription = null,
                     contentScale = ContentScale.FillWidth,
-                    modifier = Modifier.fillMaxWidth().clip(MaterialTheme.shapes.medium),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(MaterialTheme.shapes.medium)
+                        .clickable { openMedia(url) },
                 )
+            }
+            // Вложения как на сайте: фото уменьшенной копией, видео карточкой с превью
+            post.attachments.forEach { a ->
+                if (a.isVideo) {
+                    VideoCard(a.url, onClick = { openMedia(a.url) })
+                } else {
+                    AsyncImage(
+                        model = feedImageUrl(a.url),
+                        contentDescription = null,
+                        contentScale = ContentScale.FillWidth,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(MaterialTheme.shapes.medium)
+                            .clickable { openMedia(a.url) },
+                    )
+                }
             }
             // Поставленный лайк заливается цветом акцента (и не выцветает, хотя кнопка уже неактивна)
             Button(

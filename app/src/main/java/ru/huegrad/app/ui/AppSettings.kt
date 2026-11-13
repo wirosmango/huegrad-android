@@ -21,6 +21,9 @@ object AppSettings {
         private set
     var navPanelBackground by mutableStateOf(true)
         private set
+    /** Матовое стекло (размытие фона) под плавающей панелью навигации и панелью ввода на форуме. */
+    var navGlass by mutableStateOf(true)
+        private set
     /** Панель ввода сообщений на форуме: "floating" (плавающая) или "minimal" (минимализм). */
     var inputStyle by mutableStateOf("floating")
         private set
@@ -37,6 +40,7 @@ object AppSettings {
         navStyle = p.getString("nav_style", "floating") ?: "floating"
         navShape = p.getString("nav_shape", "rounded") ?: "rounded"
         navPanelBackground = p.getBoolean("nav_panel_background", true)
+        navGlass = p.getBoolean("nav_glass", true)
         inputStyle = p.getString("input_style", "floating") ?: "floating"
     }
 
@@ -67,6 +71,10 @@ object AppSettings {
     fun setNavPanelBackground(context: Context, value: Boolean) {
         navPanelBackground = value
         context.getSharedPreferences("huegrad_settings", Context.MODE_PRIVATE).edit().putBoolean("nav_panel_background", value).apply()
+    }
+    fun setNavGlass(context: Context, value: Boolean) {
+        navGlass = value
+        context.getSharedPreferences("huegrad_settings", Context.MODE_PRIVATE).edit().putBoolean("nav_glass", value).apply()
     }
     fun setInputStyle(context: Context, value: String) {
         inputStyle = value

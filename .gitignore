@@ -4,7 +4,8 @@
 keystore.properties
 local.properties
 app/google-services.json
-app/src/main/res/raw/
+app/src/main/res/raw/*.mp3
+
 
 # Сборка и IDE
 *.iml

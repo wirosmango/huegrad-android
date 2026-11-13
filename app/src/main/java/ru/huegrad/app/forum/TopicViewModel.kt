@@ -31,13 +31,50 @@ data class Post(
     val likes: Long,
     val authorUid: String? = null, // только у вошедших, нужен для уведомлений об ответах
     val images: List<String> = emptyList(), // картинки из полей документа, которых нет в тексте (старые посты)
+    val poll: Poll? = null,
+    val attachments: List<Attachment> = emptyList(), // вложения как на сайте: поле attachments [{url, type}]
 )
+
+/** Опрос лежит в посте полем poll: {question, options}. Голоса хранятся отдельно, в posts/{id}/pollVotes/{uid}. */
+data class Poll(val question: String, val options: List<String>)
+
+/** Итоги опроса: голоса по вариантам и выбор текущего пользователя (null, если не голосовал). */
+data class PollResult(val counts: List<Int>, val myVote: Int?)
+
+private fun parsePoll(raw: Any?): Poll? {
+    val m = raw as? Map<*, *> ?: return null
+    val question = m["question"] as? String ?: return null
+    val options = (m["options"] as? List<*>)?.filterIsInstance<String>() ?: return null
+    return if (question.isNotBlank() && options.size >= 2) Poll(question, options) else null
+}
 
 /** Результат загрузки фото в Cloudinary. */
 sealed interface UploadEvent {
-    data class Done(val url: String) : UploadEvent
     data class Failed(val message: String) : UploadEvent
 }
+
+const val MAX_ATTACHMENTS = 4
+
+enum class UploadStatus { UPLOADING, DONE }
+
+/** Файл, выбранный для сообщения: сначала загружается в Cloudinary, затем уходит вместе с постом. */
+data class PendingAttachment(
+    val id: Int,
+    val previewUri: Uri,
+    val isVideo: Boolean,
+    val progress: Float = 0f,
+    val status: UploadStatus = UploadStatus.UPLOADING,
+    val result: Attachment? = null,
+)
+
+/** Вложения поста; принимаются только ссылки Cloudinary (на сайте такая же проверка). */
+private fun parseAttachments(raw: Any?): List<Attachment> =
+    (raw as? List<*>).orEmpty().take(MAX_ATTACHMENTS).mapNotNull { item ->
+        val m = item as? Map<*, *> ?: return@mapNotNull null
+        val url = m["url"] as? String ?: return@mapNotNull null
+        if (!url.startsWith("https://res.cloudinary.com/")) return@mapNotNull null
+        Attachment(url, m["type"] == "video")
+    }
 
 sealed interface PostsState {
     data object NotConfigured : PostsState
@@ -66,8 +103,14 @@ class TopicViewModel(app: Application, handle: SavedStateHandle) : AndroidViewMo
     private val _liked = MutableStateFlow<Set<String>>(emptySet())
     val liked: StateFlow<Set<String>> = _liked.asStateFlow()
 
-    private val _uploading = MutableStateFlow(false)
-    val uploading: StateFlow<Boolean> = _uploading.asStateFlow()
+    private val _pollResults = MutableStateFlow<Map<String, PollResult>>(emptyMap())
+    val pollResults: StateFlow<Map<String, PollResult>> = _pollResults.asStateFlow()
+    private val pollListeners = mutableMapOf<String, ListenerRegistration>()
+
+    /** Выбранные для сообщения файлы (до 4, как на сайте). */
+    private val _attachments = MutableStateFlow<List<PendingAttachment>>(emptyList())
+    val attachments: StateFlow<List<PendingAttachment>> = _attachments.asStateFlow()
+    private var attachSeq = 0
 
     private val uploadChannel = Channel<UploadEvent>(Channel.BUFFERED)
 
@@ -112,9 +155,12 @@ class TopicViewModel(app: Application, handle: SavedStateHandle) : AndroidViewMo
                                 likes = d.getLong("likes") ?: 0L,
                                 authorUid = d.getString("authorUid"),
                                 images = extractImages(d.data, d.getString("message") ?: ""),
+                                poll = parsePoll(d.get("poll")),
+                                attachments = parseAttachments(d.get("attachments")),
                             )
                         }
                         lastPosts = posts
+                        watchPolls(posts)
                         _state.value = PostsState.Ready(posts.reversed())
                         checkLikes(posts.map { it.id })
                     }
@@ -130,33 +176,97 @@ class TopicViewModel(app: Application, handle: SavedStateHandle) : AndroidViewMo
         }
     }
 
+    private fun patchAttachment(id: Int, change: (PendingAttachment) -> PendingAttachment) {
+        _attachments.update { list -> list.map { if (it.id == id) change(it) else it } }
+    }
+
+    /** Начинает загрузку выбранных файлов: пока они грузятся, можно писать текст, а отправка ждёт окончания. */
+    fun addAttachments(uris: List<Uri>) {
+        if (ForumSession.nickname.value == null) {
+            viewModelScope.launch { uploadChannel.send(UploadEvent.Failed("Прикреплять файлы могут только вошедшие в аккаунт")) }
+            return
+        }
+        val app = getApplication<Application>()
+        for (uri in uris) {
+            if (_attachments.value.size >= MAX_ATTACHMENTS) {
+                viewModelScope.launch { uploadChannel.send(UploadEvent.Failed("Не больше $MAX_ATTACHMENTS файлов в одном сообщении")) }
+                break
+            }
+            val isVideo = app.contentResolver.getType(uri)?.startsWith("video/") == true
+            val id = ++attachSeq
+            _attachments.update { it + PendingAttachment(id, uri, isVideo) }
+            viewModelScope.launch {
+                try {
+                    val result = CloudinaryUploader.upload(app, uri) { p -> patchAttachment(id) { it.copy(progress = p) } }
+                    patchAttachment(id) { it.copy(status = UploadStatus.DONE, progress = 1f, result = result) }
+                } catch (e: CancellationException) {
+                    throw e
+                } catch (e: Exception) {
+                    _attachments.update { list -> list.filterNot { it.id == id } }
+                    uploadChannel.send(UploadEvent.Failed(e.localizedMessage ?: "Не удалось загрузить файл"))
+                }
+            }
+        }
+    }
+
+    fun removeAttachment(id: Int) {
+        _attachments.update { list -> list.filterNot { it.id == id } }
+    }
+
     /**
      * onDone получает null при успехе или текст ошибки.
-     * Вошедший пользователь пишет под своим закреплённым ником, гость под введённым (если он не занят).
+     * Писать могут только вошедшие в аккаунт. Файлы уходят в поле attachments, как на сайте.
      */
-    fun send(nick: String, message: String, imageUrl: String?, onDone: (String?) -> Unit) {
+    fun send(nick: String, message: String, onDone: (String?) -> Unit) {
+        val pending = _attachments.value
+        if (pending.any { it.status == UploadStatus.UPLOADING }) {
+            onDone("Дождитесь окончания загрузки файлов")
+            return
+        }
+        val ready = pending.mapNotNull { it.result }
+        val text = message.trim().take(2000)
+        if (text.isEmpty() && ready.isEmpty()) {
+            onDone("Пустое сообщение")
+            return
+        }
+        val extra = if (ready.isNotEmpty()) mapOf("attachments" to ready.map { it.toMap() }) else emptyMap()
+        publish(nick, text, text.ifBlank { "[вложение]" }, extra) { error ->
+            if (error == null) _attachments.value = emptyList()
+            onDone(error)
+        }
+    }
+
+    /**
+     * Опрос публикуется обычным постом с полем poll. В message он дублируется текстом, чтобы сайт,
+     * который опросы не рисует, показал хотя бы вопрос и варианты.
+     */
+    fun sendPoll(nick: String, question: String, options: List<String>, onDone: (String?) -> Unit) {
+        val q = question.trim().take(150)
+        val opts = options.map { it.trim().take(60) }.filter { it.isNotEmpty() }.distinct().take(6)
+        if (q.isEmpty() || opts.size < 2) {
+            onDone("Нужен вопрос и минимум два разных варианта")
+            return
+        }
+        val message = buildString {
+            append("📊 ").append(q)
+            opts.forEachIndexed { i, o -> append("\n${i + 1}. ").append(o) }
+        }
+        publish(nick, message, "📊 $q", mapOf("poll" to mapOf("question" to q, "options" to opts)), onDone)
+    }
+
+    private fun publish(nick: String, full: String, notifyText: String, extra: Map<String, Any?>, onDone: (String?) -> Unit) {
         viewModelScope.launch {
             val registered = ForumSession.nickname.value
-            val nickname = (registered ?: nick.trim()).take(30)
-            // Прикреплённое фото уходит в конце сообщения строкой ![](url), как на сайте
-            val suffix = imageUrl?.let { "\n![]($it)" }.orEmpty()
-            val text = message.trim().take((2000 - suffix.length).coerceAtLeast(0)).trim()
-            val full = (text + suffix).trim()
-            if (full.isEmpty()) {
-                onDone("Пустое сообщение")
+            val user = FirebaseAuth.getInstance().currentUser
+            // Писать могут только вошедшие в аккаунт: анонимный вход остаётся для чтения и лайков
+            if (registered == null || user == null || user.isAnonymous) {
+                onDone("Писать могут только вошедшие в аккаунт")
                 return@launch
             }
+            val nickname = registered.take(30)
             try {
-                // После выхода из аккаунта вход анонимный нужно восстановить, иначе правила запретят запись
                 val uid = ForumAuth.signIn()
 
-                // Гость не может писать под ником, который занят зарегистрированным пользователем
-                if (registered == null && ForumIdentity.isNickTaken(nickname)) {
-                    onDone("Этот ник занят зарегистрированным пользователем. Выберите другой или войдите.")
-                    return@launch
-                }
-
-                val user = FirebaseAuth.getInstance().currentUser
                 // Как на сайте: photoURL пишется только если у вошедшего пользователя есть фото,
                 // а authorUid только у вошедших
                 val photo = user?.takeIf { !it.isAnonymous }?.photoUrl?.toString()
@@ -169,13 +279,14 @@ class TopicViewModel(app: Application, handle: SavedStateHandle) : AndroidViewMo
                 )
                 if (!photo.isNullOrBlank()) data["photoURL"] = photo
                 if (registered != null) data["authorUid"] = uid
+                data.putAll(extra)
 
                 val ref = db.collection("posts").add(data).await()
                 onDone(null)
 
                 ForumSession.notifyRecipients(
                     postId = ref.id,
-                    message = text.ifBlank { "[фото]" },
+                    message = notifyText,
                     authorNick = nickname,
                     fromUid = uid,
                     fromPhoto = photo?.takeIf { it.isNotBlank() },
@@ -189,20 +300,39 @@ class TopicViewModel(app: Application, handle: SavedStateHandle) : AndroidViewMo
         }
     }
 
-    /** Загружает фото в Cloudinary; ссылка приходит в [uploadEvents] и показывается превью над полем, к сообщению добавляется при отправке. */
-    fun uploadImage(uri: Uri) {
-        if (_uploading.value) return
-        _uploading.value = true
+    /** На каждый опрос в теме вешается один слушатель голосов; итоги считаются на устройстве. */
+    private fun watchPolls(posts: List<Post>) {
+        for (p in posts) {
+            val poll = p.poll ?: continue
+            if (pollListeners.containsKey(p.id)) continue
+            pollListeners[p.id] = db.collection("posts").document(p.id).collection("pollVotes")
+                .addSnapshotListener { snap, err ->
+                    if (err != null || snap == null) return@addSnapshotListener
+                    val me = FirebaseAuth.getInstance().currentUser?.uid ?: uid
+                    val counts = IntArray(poll.options.size)
+                    var mine: Int? = null
+                    for (d in snap.documents) {
+                        val o = d.getLong("option")?.toInt() ?: continue
+                        if (o !in counts.indices) continue
+                        counts[o]++
+                        if (d.id == me) mine = o
+                    }
+                    _pollResults.update { it + (p.id to PollResult(counts.toList(), mine)) }
+                }
+        }
+    }
+
+    /** Один голос на пользователя: документ pollVotes/{uid} создаётся один раз, голос изменить нельзя. */
+    fun vote(postId: String, option: Int, onError: (String) -> Unit) {
+        if (_pollResults.value[postId]?.myVote != null) return
         viewModelScope.launch {
             try {
-                val url = CloudinaryUploader.upload(getApplication<Application>(), uri)
-                uploadChannel.send(UploadEvent.Done(url))
-            } catch (e: CancellationException) {
-                throw e
+                val me = ForumAuth.signIn()
+                db.collection("posts").document(postId).collection("pollVotes").document(me)
+                    .set(mapOf("option" to option, "createdAt" to FieldValue.serverTimestamp()))
+                    .await()
             } catch (e: Exception) {
-                uploadChannel.send(UploadEvent.Failed(e.localizedMessage ?: "Не удалось загрузить фото"))
-            } finally {
-                _uploading.value = false
+                onError(e.localizedMessage ?: "Не удалось проголосовать")
             }
         }
     }
@@ -224,11 +354,12 @@ class TopicViewModel(app: Application, handle: SavedStateHandle) : AndroidViewMo
 
     override fun onCleared() {
         registration?.remove()
+        pollListeners.values.forEach { it.remove() }
         super.onCleared()
     }
 }
 
-private val notImageKeys = setOf("message", "nickname", "photoURL", "avatarUrl", "authorUid", "topicId")
+private val notImageKeys = setOf("attachments", "message", "nickname", "photoURL", "avatarUrl", "authorUid", "topicId")
 
 /**
  * Старые посты могли хранить картинку отдельным полем (имя поля неизвестно), поэтому просматриваем

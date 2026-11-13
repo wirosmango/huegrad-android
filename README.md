@@ -27,3 +27,6 @@ keyPassword=...
 
 ## Шрифт
 Используется Google Sans (Copyright The Google Sans Project Authors, github.com/googlefonts/googlesans), лицензия SIL Open Font License 1.1, текст в `app/src/main/assets/licenses/OFL.txt`. Файлы шрифта уменьшены до латиницы, кириллицы и основной пунктуации.
+
+## Значки
+В минималистичной панели ввода используются значки Solar Icons, лицензия CC BY 4.0 (лежит в app/assets/SOLAR-ICONS.txt).

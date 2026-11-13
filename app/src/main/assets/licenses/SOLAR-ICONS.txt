@@ -1,0 +1,7 @@
+Solar Icons by 480 Design
+https://github.com/480-Design/Solar-Icon-Set
+Лицензия: Creative Commons Attribution 4.0 International (CC BY 4.0)
+https://creativecommons.org/licenses/by/4.0/
+
+Используются иконки paperclip, plain, gallery-add, clapperboard-play и chart-square (стиль Linear)
+в минималистичной панели ввода на форуме.

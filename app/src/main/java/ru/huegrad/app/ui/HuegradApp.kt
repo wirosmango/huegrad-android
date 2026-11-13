@@ -56,6 +56,8 @@ import androidx.navigation.navArgument
 import ru.huegrad.app.forum.AppNotification
 import ru.huegrad.app.forum.ForumSession
 import androidx.navigation.compose.NavHost
+import dev.chrisbanes.haze.hazeSource
+import dev.chrisbanes.haze.rememberHazeState
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
@@ -63,6 +65,7 @@ import ru.huegrad.app.data.Content
 import ru.huegrad.app.ui.screens.ArticleScreen
 import ru.huegrad.app.ui.screens.DrochkaScreen
 import ru.huegrad.app.ui.screens.EasterEggScreen
+import ru.huegrad.app.ui.screens.ForumLoginPrompt
 import ru.huegrad.app.ui.screens.EducationScreen
 import ru.huegrad.app.ui.screens.ForumScreen
 import ru.huegrad.app.ui.screens.HistoryScreen
@@ -146,6 +149,9 @@ fun HuegradApp() {
             )
         }
     ) {
+    // Матовое стекло: плавающая панель размывает содержимое страницы, которое проходит под ней
+    val navHaze = rememberHazeState()
+    val glassNav = AppSettings.navStyle == "floating" && AppSettings.navGlass && AppSettings.navPanelBackground
     Scaffold(
         contentWindowInsets = NoInsets,
         topBar = {},
@@ -188,12 +194,13 @@ fun HuegradApp() {
                             .padding(horizontal = FloatingBarSideInset, vertical = FloatingBarVerticalInset),
                         contentAlignment = Alignment.Center,
                     ) {
+                        val barShape = if (AppSettings.navShape == "rectangle") RoundedCornerShape(16.dp) else CircleShape
                         Surface(
-                            modifier = Modifier.fillMaxWidth(),
-                            shape = if (AppSettings.navShape == "rectangle") RoundedCornerShape(16.dp) else CircleShape,
-                            color = panelColor,
-                            tonalElevation = if (AppSettings.navPanelBackground) 3.dp else 0.dp,
-                            shadowElevation = if (AppSettings.navPanelBackground) 8.dp else 0.dp,
+                            modifier = Modifier.fillMaxWidth().then(if (glassNav) Modifier.frostedGlass(navHaze, barShape, bordered = false) else Modifier),
+                            shape = barShape,
+                            color = if (glassNav) Color.Transparent else panelColor,
+                            tonalElevation = if (AppSettings.navPanelBackground && !glassNav) 3.dp else 0.dp,
+                            shadowElevation = if (AppSettings.navPanelBackground && !glassNav) 8.dp else 0.dp,
                         ) {
                             Row(
                                 modifier = Modifier.fillMaxWidth().height(54.dp),
@@ -250,12 +257,14 @@ fun HuegradApp() {
                 navController = nav,
                 startDestination = Dest.Home.route,
                 // MD3 is docked and reserves space; the floating pill intentionally overlays content.
-                modifier = if (AppSettings.navStyle == "md3" || drawerMode) Modifier.padding(innerPadding) else Modifier,
+                modifier = (if (AppSettings.navStyle == "md3" || drawerMode) Modifier.padding(innerPadding) else Modifier)
+                    .then(if (glassNav) Modifier.hazeSource(navHaze) else Modifier),
             ) {
                 composable(Dest.Home.route) { HomeScreen() }
                 composable(Dest.Radio.route) { RadioScreen(onOpenTracks = { nav.navigate("radio/tracks") }) }
                 composable("radio/tracks") { RadioTracksScreen(onBack = back) }
                 composable(Dest.Forum.route) {
+                    ForumLoginPrompt()
                     ForumScreen(
                         onOpenTopic = { id -> nav.navigate("forum/topic/$id") },
                         onOpenNotification = openNotification,

@@ -14,8 +14,9 @@ val localProps = Properties().apply {
     val f = rootProject.file("local.properties")
     if (f.exists()) f.inputStream().use { load(it) }
 }
-fun cloudinaryProp(key: String, env: String): String =
-    (localProps.getProperty(key) ?: System.getenv(env) ?: "").trim()
+// Значения по умолчанию те же, что в forum.js сайта: так вложения из приложения видны и на сайте
+fun cloudinaryProp(key: String, env: String, default: String): String =
+    (localProps.getProperty(key) ?: System.getenv(env) ?: default).trim()
 
 android {
     namespace = "ru.huegrad.app"
@@ -25,16 +26,18 @@ android {
         applicationId = "ru.huegrad.app"
         minSdk = 26
         targetSdk = 36
-        versionCode = 1
-        versionName = "2.7"
+        versionCode = 3
+        versionName = "3.0"
 
-        buildConfigField("String", "CLOUDINARY_CLOUD_NAME", "\"${cloudinaryProp("cloudinary.cloudName", "CLOUDINARY_CLOUD_NAME")}\"")
-        buildConfigField("String", "CLOUDINARY_UPLOAD_PRESET", "\"${cloudinaryProp("cloudinary.uploadPreset", "CLOUDINARY_UPLOAD_PRESET")}\"")
+        buildConfigField("String", "CLOUDINARY_CLOUD_NAME", "\"${cloudinaryProp("cloudinary.cloudName", "CLOUDINARY_CLOUD_NAME", "xwhjf44a")}\"")
+        buildConfigField("String", "CLOUDINARY_UPLOAD_PRESET", "\"${cloudinaryProp("cloudinary.uploadPreset", "CLOUDINARY_UPLOAD_PRESET", "dealdo")}\"")
     }
 
     buildTypes {
         release {
-            // R8 убирает неиспользуемый код, а сжатие ресурсов выбрасывает неиспользуемые файлы (keep.xml защищает картинки и треки)
+            // R8 сжимает и обфусцирует код. Сжатие ресурсов выключено: картинки и треки ищутся по имени
+            // (getIdentifier и android.resource://), а такие ресурсы в release вырезаются или переименовываются,
+            // и вместо картинок остаётся заглушка, а треки не играют.
             isMinifyEnabled = true
             isShrinkResources = false
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
@@ -69,8 +72,10 @@ dependencies {
 
     implementation(libs.media3.exoplayer)
     implementation(libs.media3.session)
+    implementation(libs.media3.ui) // плеер с элементами управления для видео на форуме
 
     implementation(libs.coil.compose)
+    implementation(libs.haze) // размытие фона под плавающей панелью ввода (матовое стекло)
     implementation(libs.jsoup)
     implementation(libs.coil.network.okhttp)
 

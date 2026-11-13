@@ -34,9 +34,11 @@ import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.withLink
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
+import androidx.compose.foundation.clickable
 import coil3.compose.AsyncImage
 import ru.huegrad.app.forum.ForumIdentity
 import ru.huegrad.app.forum.isImageUrl
+import ru.huegrad.app.forum.isVideoUrl
 import ru.huegrad.app.forum.secureImageUrl
 
 /*
@@ -53,6 +55,7 @@ internal sealed interface MdBlock {
     data class Code(val code: String) : MdBlock
     data class Items(val ordered: Boolean, val items: List<String>) : MdBlock
     data class Image(val alt: String, val url: String) : MdBlock
+    data class Video(val url: String) : MdBlock
 }
 
 private val headingRe = Regex("^(#{1,3})\\s+(.+)$")
@@ -72,15 +75,18 @@ private val inlineImageRe = Regex(
         """|(?<![(\"'=\w`])(https?://[^\s<>"]+)"""
 )
 
-private fun imageOf(m: MatchResult): MdBlock.Image? {
+private fun mediaBlock(alt: String, url: String): MdBlock =
+    if (isVideoUrl(url)) MdBlock.Video(secureImageUrl(url)) else MdBlock.Image(alt, secureImageUrl(url))
+
+private fun imageOf(m: MatchResult): MdBlock? {
     val g = m.groupValues
     return when {
-        g[2].isNotEmpty() -> MdBlock.Image(g[1], secureImageUrl(g[2]))
-        g[4].isNotEmpty() -> MdBlock.Image(g[3], secureImageUrl(g[4]))
-        g[5].isNotEmpty() -> MdBlock.Image("", secureImageUrl(g[5]))
+        g[2].isNotEmpty() -> mediaBlock(g[1], g[2])
+        g[4].isNotEmpty() -> mediaBlock(g[3], g[4])
+        g[5].isNotEmpty() -> mediaBlock("", g[5])
         g[6].isNotEmpty() -> {
             val url = g[6].trimEnd('.', ',', ';', ':', '!', '?', ')')
-            if (isImageUrl(url)) MdBlock.Image("", secureImageUrl(url)) else null
+            if (isImageUrl(url) || isVideoUrl(url)) mediaBlock("", url) else null
         }
         else -> null
     }
@@ -123,7 +129,7 @@ internal fun parseMarkdown(src: String): List<MdBlock> {
             imageRe.matches(trimmed) -> {
                 flush()
                 val m = imageRe.find(trimmed)!!
-                out += MdBlock.Image(m.groupValues[1], m.groupValues[2])
+                out += mediaBlock(m.groupValues[1], m.groupValues[2])
                 i++
             }
             quoteRe.matches(trimmed) -> {
@@ -246,6 +252,7 @@ fun MarkdownText(
     onRefClick: (Int) -> Unit,
     modifier: Modifier = Modifier,
     myNick: String? = null,
+    onMediaClick: ((String) -> Unit)? = null,
 ) {
     val blocks = remember(text) { parseMarkdown(text) }
     val scheme = MaterialTheme.colorScheme
@@ -310,8 +317,12 @@ fun MarkdownText(
                     model = block.url,
                     contentDescription = block.alt.ifBlank { null },
                     contentScale = ContentScale.FillWidth,
-                    modifier = Modifier.fillMaxWidth().clip(MaterialTheme.shapes.medium),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(MaterialTheme.shapes.medium)
+                        .then(if (onMediaClick != null) Modifier.clickable { onMediaClick(block.url) } else Modifier),
                 )
+                is MdBlock.Video -> VideoCard(block.url, onClick = onMediaClick?.let { click -> { click(block.url) } })
             }
         }
     }
