@@ -27,7 +27,7 @@ android {
         minSdk = 26
         targetSdk = 36
         versionCode = 3
-        versionName = "3.0"
+        versionName = "3.1"
 
         buildConfigField("String", "CLOUDINARY_CLOUD_NAME", "\"${cloudinaryProp("cloudinary.cloudName", "CLOUDINARY_CLOUD_NAME", "xwhjf44a")}\"")
         buildConfigField("String", "CLOUDINARY_UPLOAD_PRESET", "\"${cloudinaryProp("cloudinary.uploadPreset", "CLOUDINARY_UPLOAD_PRESET", "dealdo")}\"")

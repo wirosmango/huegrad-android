@@ -147,11 +147,11 @@ private fun ServerCard(modifier: Modifier = Modifier) {
                 "Официальная страница лучшего сервера на свете",
                 style = MaterialTheme.typography.bodyMedium,
             )
-            Text(Site.SERVER_HOST, style = MaterialTheme.typography.titleMedium)
             Text(
                 "${Site.SERVER_IP} · Версия: ${Site.SERVER_VERSION}",
                 style = MaterialTheme.typography.bodyMedium,
             )
+
             Button(
                 onClick = {
                     scope.launch {
